@@ -48,7 +48,7 @@ func CreateBridgeStorageRESTClient(t *testing.T, called *sync.Map) *httptest.Ser
 					w.WriteHeader(500)
 					return
 				}
-				t.Logf("GGM got buf of len %d", len(data.Body))
+				t.Logf("got buf of len %d", len(data.Body))
 				called.Store(r.URL.Path, string(data.Body))
 				_, _ = w.Write([]byte(fmt.Sprintf(common.TestPostJSONStringOneLinePlusBody, string(data.Body))))
 				w.WriteHeader(201)

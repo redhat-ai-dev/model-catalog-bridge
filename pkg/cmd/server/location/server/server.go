@@ -41,8 +41,9 @@ func NewImportLocationServer(content map[string]*ImportLocation) *ImportLocation
 		r.GET(uri, il.handleCatalogInfoGet)
 		d.Uris = append(d.Uris, uri)
 	}
-	r.GET("/list", i.handleCatalogDiscoveryGet)
-	r.POST("/upsert", i.handleCatalogUpsertPost)
+	r.GET(util.ListURI, i.handleCatalogDiscoveryGet)
+	r.POST(util.UpsertURI, i.handleCatalogUpsertPost)
+	r.DELETE(util.RemoveURI, i.handleCatalogDelete)
 	return i
 }
 
@@ -80,6 +81,10 @@ type ImportLocation struct {
 }
 
 func (i *ImportLocation) handleCatalogInfoGet(c *gin.Context) {
+	if i.content == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
 	c.Data(http.StatusOK, "Content-Type: application/json", i.content)
 }
 
@@ -89,9 +94,14 @@ type DicoveryResponse struct {
 
 func (i *ImportLocationServer) handleCatalogDiscoveryGet(c *gin.Context) {
 	d := &DicoveryResponse{}
-	for uri := range i.content {
+	for uri, il := range i.content {
 		//TODO normalizer id should be part of the model lookup URI a la "kubeflow/mnist/v1" or "kserve/mnist/v1"
-		d.Uris = append(d.Uris, uri)
+
+		// since we cannot delete handlers from gin, when we delete a location, rather than removing from the map,
+		// we set the contents field to nil, so we check for that before deciding to in include the URI
+		if il.content != nil {
+			d.Uris = append(d.Uris, uri)
+		}
 	}
 	content, err := json.Marshal(d)
 	if err != nil {
@@ -135,4 +145,29 @@ func (u *ImportLocationServer) handleCatalogUpsertPost(c *gin.Context) {
 	il.content = postBody.Body
 	u.content[uri] = il
 	c.Status(http.StatusCreated)
+}
+
+func (u *ImportLocationServer) handleCatalogDelete(c *gin.Context) {
+	key := c.Query("key")
+	if len(key) == 0 {
+		c.Status(http.StatusBadRequest)
+		c.Error(fmt.Errorf("need a 'key' parameter"))
+		return
+	}
+	segs := strings.Split(key, "_")
+	if len(segs) < 2 {
+		c.Status(http.StatusBadRequest)
+		c.Error(fmt.Errorf("bad key format: %s", key))
+		return
+	}
+	//TODO normalizer id should be part of the model lookup URI
+	_, uri := util.BuildImportKeyAndURI(segs[0], segs[1])
+	klog.Infof("Removing URI %s", uri)
+	// there is no way to unregister a URI, so we remove its content regardless of removing it from the map so that
+	// when backstage calls, we can return it a not found if the content is now nil
+	il, ok := u.content[uri]
+	if ok {
+		il.content = nil
+	}
+	c.Status(http.StatusOK)
 }

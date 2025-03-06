@@ -216,9 +216,13 @@ func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconc
 
 	if err != nil {
 		log.V(4).Info(fmt.Sprintf("initiating delete processing for %s", name.String()))
-		//TODO initiate delete processing, interacting with catalog rest API directly, our extensions are not involved;
-		//TODO or we just wait for the polling entity provide to see things are gone and delete
-		//TODO minimally we need to delete from our location service / our storage
+		// now, delete of the inference service does not mean the model has been deleted from model registry,
+		// so we don't remove the model from our catalog, but may simply remove the URL associated with the inference
+		// service; initiate a KFMR poll to reset any entries which depended on our inference service here
+		b := []byte{}
+		buf := bytes.NewBuffer(b)
+		bwriter := bufio.NewWriter(buf)
+		r.innerStart(ctx, buf, bwriter)
 
 		return reconcile.Result{}, nil
 	}
@@ -334,9 +338,10 @@ func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.N
 						}
 
 						//TODO do we mandate a prop be set on the RM or MV for owner,lifecycle?
-						err = kubeflowmodelregistry.CallBackstagePrinters(is.Namespace,
-							"development",
+						err = kubeflowmodelregistry.CallBackstagePrinters(util.DefaultOwner,
+							util.DefaultLifecycle,
 							&rm,
+							//TODO deal with multiple versions
 							[]openapi.ModelVersion{*mv},
 							map[string][]openapi.ModelArtifact{mvId: {*ma}},
 							[]openapi.InferenceService{kfmrIS},
@@ -373,33 +378,33 @@ func (r *RHOAINormalizerReconcile) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-eventTicker.C:
-			r.innerStart(ctx)
+			b := []byte{}
+			buf := bytes.NewBuffer(b)
+			bwriter := bufio.NewWriter(buf)
+			r.innerStart(ctx, buf, bwriter)
 
 		case <-ctx.Done():
 		}
 	}
 }
 
-func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context) {
+func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context, buf *bytes.Buffer, bwriter *bufio.Writer) {
 	ready := r.setupKFMR(ctx)
 	if !ready {
 		return
 	}
-
-	b := []byte{}
-	buf := bytes.NewBuffer(b)
-	bwriter := bufio.NewWriter(buf)
 
 	var err error
 	var rms []openapi.RegisteredModel
 	var mvs map[string][]openapi.ModelVersion
 
 	//TODO what do we do with owner/lifecycle when we poll
-	rms, mvs, err = kubeflowmodelregistry.LoopOverKFMR("rhdh-rhoai-bridge", "development", []string{}, bwriter, r.kfmr, r.client)
+	rms, mvs, err = kubeflowmodelregistry.LoopOverKFMR(util.DefaultOwner, util.DefaultLifecycle, []string{}, bwriter, r.kfmr, r.client)
 	if err != nil {
 		controllerLog.Error(err, "err looping over KFMR")
 		return
 	}
+	keys := []string{}
 	for _, rm := range rms {
 		mva, ok := mvs[rm.Name]
 		if !ok {
@@ -407,6 +412,7 @@ func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context) {
 		}
 		for _, mv := range mva {
 			importKey := rm.Name + "_" + mv.Name
+			keys = append(keys, importKey)
 			importURI := "/" + rm.Name + "/" + mv.Name + "/catalog-info.yaml"
 			err = r.processBWriter(ctx, bwriter, buf, importKey, importURI)
 			if err != nil {
@@ -414,6 +420,17 @@ func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context) {
 				continue
 			}
 		}
+	}
+
+	rc := 0
+	msg := ""
+	rc, msg, err = r.storage.PostCurrentKeySet(keys)
+	if err != nil {
+		controllerLog.Error(err, "error updating current key set")
+		return
+	}
+	if rc != http.StatusCreated && rc != http.StatusOK {
+		controllerLog.Error(fmt.Errorf("post to storage returned rc %d: %s", rc, msg), "bad rc updating current key set")
 	}
 
 }

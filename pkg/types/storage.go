@@ -7,6 +7,7 @@ type BridgeStorage interface {
 	Fetch(key string) (StorageBody, error)
 	Upsert(key string, value StorageBody) error
 	Remove(key string) error
+	List() ([]string, error)
 }
 
 type StorageBody struct {
