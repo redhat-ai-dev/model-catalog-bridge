@@ -1,0 +1,133 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Model Catalog",
+    "description": "Schema for defining model and model servers for conversion to Backstage catalog entities",
+    "type": "object",
+    "properties": {
+        "modelServer": {
+            "description": "A deployed model server running one or more models, exposed over an API",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "The name of the model server",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "The URL to access the model server",
+                    "type": "string"
+                },
+                "owner": {
+                    "description": "The Backstage user that will be responsible for the model server",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "A description of the model server and what it's for",
+                    "type": "string"
+                },
+                "usage": {
+                    "description": "How to use and interact with the model server",
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "Descriptive tags for the model server",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "apiURL": {
+                    "description": "The URL that the model server's API is exposed over",
+                    "type": "string"
+                },
+                "apiType": {
+                    "description": "The type of API that the model server exposes",
+                    "type": "string",
+                    "enum": ["openapi", "asyncapi", "graphql", "grpc"]
+                },
+                "apiSpec": {
+                    "description": "The schema used by the model server API",
+                    "type": "string"
+                },
+                "apiTags": {
+                    "description": "Descriptive tags for the model server's API",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "lifecycle": {
+                    "description": "The lifecycle state of the model server API",
+                    "type": "string"
+                },
+                "authentication": {
+                    "description": "Whether or not the model server requires authentication to access",
+                    "type": "boolean"
+                }
+            },
+            "required": ["name", "url", "owner", "description"]
+        },
+        "models": {
+            "description": "An array of AI models to be imported into the Backstage catalog",
+            "type": "array",
+            "items": {
+                "description": "An AI model to be imported into the Backstage catalog",
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "description": "The name of the model",
+                        "type": "string"
+                    },
+                    "url": {
+                        "description": "The URL to access the model",
+                        "type": "string"
+                    },
+                    "owner": {
+                        "description": "The Backstage user that will be responsible for the model",
+                        "type": "string"
+                    },
+                    "description": {
+                        "description": "A description of the model and what it's for",
+                        "type": "string"
+                    },
+                    "usage": {
+                        "description": "How to use and interact with the model",
+                        "type": "string"
+                    },
+                    "tags": {
+                        "description": "Descriptive tags for the model",
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "resourceURL": {
+                        "description": "A URL to access the model's resources",
+                        "type": "string"
+                    },
+                    "apiURL": {
+                        "description": "The URL that the model server's API is exposed over",
+                        "type": "string"
+                    },
+                    "support": {
+                        "description": "Support information for the model / where to open issues",
+                        "type": "string"
+                    },
+                    "training": {
+                        "description": "Information on how the model was trained",
+                        "type": "string"
+                    },
+                    "ethics": {
+                        "description": "Any ethical considerations for the model",
+                        "type": "string"
+                    },
+                    "lifecycle": {
+                        "description": "The lifecycle state of the model server API",
+                        "type": "string"
+                    }
+                },
+                "required": ["name", "url", "owner", "description"]
+            }
+            
+        }
+    }
+}
