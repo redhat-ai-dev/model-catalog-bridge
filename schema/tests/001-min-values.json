@@ -9,7 +9,6 @@
       {
         "name": "ibm-granite-20b",
         "description": "IBM Granite 20b model running on vLLM",
-        "url": "https://example.com/granite",
         "owner": "example-user"
       }
     ]

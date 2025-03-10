@@ -16,7 +16,6 @@
       {
         "name": "ibm-granite-20b",
         "description": "IBM Granite 20b model running on vLLM",
-        "url": "https://example.com/granite",
         "resourceURL": "https://huggingface.co/ibm-granite/granite-20b-code-instruct",
         "tags": ["IBM", "granite", "vllm", "20b"],
         "owner": "example-user"
@@ -24,7 +23,6 @@
       {
         "name": "mistral-7b",
         "description": "Mistral 7b model running on vLLM",
-        "url": "https://example.com/mistral",
         "resourceURL": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2",
         "tags": ["mistralai", "mistral", "vllm", "7b"],
         "owner": "example-user"
@@ -32,7 +30,6 @@
       {
         "name": "gemma-2-2b",
         "description": "Google Gemma 2 2b model running on vLLM",
-        "url": "https://example.com/gemma",
         "resourceURL": "https://huggingface.co/google/gemma-2-2b",
         "tags": ["google", "gemma"],
         "owner": "example-user"
