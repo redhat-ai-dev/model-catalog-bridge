@@ -1,0 +1,16 @@
+{
+    "modelServer": {
+      "name": "developer-model-service",
+      "url": "https://example.com",
+      "owner": "example-user",
+      "description": "Developer model service running on vLLM"
+    },
+    "model": [
+      {
+        "name": "ibm-granite-20b",
+        "description": "IBM Granite 20b model running on vLLM",
+        "url": "https://example.com/granite",
+        "owner": "example-user"
+      }
+    ]
+  }
