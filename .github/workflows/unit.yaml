@@ -42,13 +42,13 @@ jobs:
 
       # Validate the 
       - name: Validate model catalog JSON schema
-        uses: dsanders11/json-schema-validate-action
+        uses: dsanders11/json-schema-validate-action@v1.2.0
         with:
           schema: json-schema
           files: schema/model-catalog.schema.json
 
       - name: Test the model catalog JSON schema
-        uses: dsanders11/json-schema-validate-action
+        uses: dsanders11/json-schema-validate-action@v1.2.0
         with:
           schema: schema/model-catalog.schema.json
           files: schema/tests/*.json
