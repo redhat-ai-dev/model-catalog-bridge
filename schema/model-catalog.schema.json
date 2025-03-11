@@ -12,8 +12,8 @@
                     "description": "The name of the model server",
                     "type": "string"
                 },
-                "url": {
-                    "description": "The URL to access the model server",
+                "homepageURL": {
+                    "description": "The URL for the model server's homepage, if present",
                     "type": "string"
                 },
                 "owner": {
@@ -35,25 +35,32 @@
                         "type": "string"
                     }
                 },
-                "apiURL": {
-                    "description": "The URL that the model server's API is exposed over",
-                    "type": "string"
-                },
-                "apiType": {
-                    "description": "The type of API that the model server exposes",
-                    "type": "string",
-                    "enum": ["openapi", "asyncapi", "graphql", "grpc"]
-                },
-                "apiSpec": {
-                    "description": "The schema used by the model server API",
-                    "type": "string"
-                },
-                "apiTags": {
-                    "description": "Descriptive tags for the model server's API",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "API": {
+                    "type": "object",
+                    "description": "The API metadata associated with the model server",
+                    "properties": {
+                        "url": {
+                            "description": "The URL that the model server's REST API is exposed over, how the model(s) are interacted with",
+                            "type": "string"
+                        },
+                        "type": {
+                            "description": "The type of API that the model server exposes",
+                            "type": "string",
+                            "enum": ["openapi", "asyncapi", "graphql", "grpc"]
+                        },
+                        "spec": {
+                            "description": "A link to the schema used by the model server API",
+                            "type": "string"
+                        },
+                        "tags": {
+                            "description": "Descriptive tags for the model server's API",
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "required": ["url", "type", "spec"]
                 },
                 "lifecycle": {
                     "description": "The lifecycle state of the model server API",
@@ -64,7 +71,7 @@
                     "type": "boolean"
                 }
             },
-            "required": ["name", "url", "owner", "description"]
+            "required": ["name", "owner", "lifecycle", "description"]
         },
         "models": {
             "description": "An array of AI models to be imported into the Backstage catalog",
@@ -96,12 +103,12 @@
                             "type": "string"
                         }
                     },
-                    "resourceURL": {
-                        "description": "A URL to access the model's resources",
+                    "artifactLocationURL": {
+                        "description": "A URL to access the model's artifacts, e.g. on HuggingFace, Minio, Github, etc",
                         "type": "string"
                     },
-                    "apiURL": {
-                        "description": "The URL that the model server's API is exposed over",
+                    "howToUseURL": {
+                        "description": "The URL pointing to any specific documentation on how to use the model on the model server",
                         "type": "string"
                     },
                     "support": {
@@ -121,9 +128,17 @@
                         "type": "string"
                     }
                 },
-                "required": ["name", "url", "owner", "description"]
+                "required": ["name", "owner", "description", "lifecycle"]
             }
             
+        }   
+    },
+    "anyOf": [
+        {
+            "required": ["models"]
+        },
+        {
+            "required": ["modelSever", "models"]
         }
-    }
+    ]
 }

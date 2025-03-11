@@ -1,15 +1,21 @@
 {
-    "modelServer": {
-      "name": "developer-model-service",
-      "url": "https://example.com",
-      "owner": "example-user",
-      "description": "Developer model service running on vLLM"
+  "modelServer": {
+    "name": "developer-model-service",
+    "owner": "example-user",
+    "description": "Developer model service running on vLLM",
+    "API": {
+      "url": "https://api.example.com",
+      "type": "openapi",
+      "spec": "https://raw.githubusercontent.com/redhat-ai-dev/model-catalog-example/refs/heads/main/developer-model-service/openapi.json"
     },
-    "model": [
-      {
-        "name": "ibm-granite-20b",
-        "description": "IBM Granite 20b model running on vLLM",
-        "owner": "example-user"
-      }
-    ]
-  }
+    "lifecycle": "production"
+  },
+  "models": [
+    {
+      "name": "ibm-granite-20b",
+      "description": "IBM Granite 20b model running on vLLM",
+      "owner": "example-user",
+      "lifecycle": "production"
+    }
+  ]
+}

@@ -6,19 +6,24 @@
     "description": "Developer model service running on vLLM",
     "usage": "Model server usage description",
     "tags": ["vLLM", "granite", "ibm"],
-    "apiURL": "https://api.example.com",
-    "apiType": "openapi",
-    "apiSpec": "https://raw.githubusercontent.com/redhat-ai-dev/model-catalog-example/refs/heads/main/developer-model-service/openapi.json",
+    "API": {
+      "url": "https://api.example.com",
+      "type": "openapi",
+      "spec": "https://raw.githubusercontent.com/redhat-ai-dev/model-catalog-example/refs/heads/main/developer-model-service/openapi.json",
+      "tags": ["openapi", "openai", "3scale"]
+    },
+    "lifecycle": "production",
     "authentication": true,
     "apiTags": ["openapi", "openai", "3scale"]
   },
-  "model": [
+  "models": [
     {
       "name": "ibm-granite-20b",
       "description": "Granite-8B-Code-Instruct-4K is a 8B parameter model fine-tuned from Granite-8B-Code-Base-4K on a combination of permissively licensed instruction data to enhance instruction following capabilities including logical reasoning and problem-solving skills.",
-      "resourceURL": "https://huggingface.co/ibm-granite/granite-20b-code-instruct",
+      "artifactLocationURL": "https://huggingface.co/ibm-granite/granite-20b-code-instruct",
       "tags": ["IBM", "granite", "vllm", "20b"],
       "owner": "example-user",
+      "lifecycle": "production",
       "support": "string",
       "training": "The Granite Code Instruct models were trained on the following data types:\n- **Code Commits Datasets:** we sourced code commits data from the [CommitPackFT](https://huggingface.co/datasets/bigcode/commitpackft) dataset, a filtered version of the full CommitPack dataset. From CommitPackFT dataset, we only consider data for 92 programming languages. Our inclusion criteria boils down to selecting programming languages common across CommitPackFT and the 116 languages that we considered to pretrain the code-base model (*Granite-8B-Code-Base*).\n- **Math Datasets:** We consider two high-quality math datasets, [MathInstruct](https://huggingface.co/datasets/TIGER-Lab/MathInstruct) and [MetaMathQA](https://huggingface.co/datasets/meta-math/MetaMathQA). Due to license issues, we filtered out GSM8K-RFT and Camel-Math from MathInstruct dataset.\n- **Code Instruction Datasets:** We use [Glaive-Code-Assistant-v3](https://huggingface.co/datasets/glaiveai/glaive-code-assistant-v3), [Glaive-Function-Calling-v2](https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2), [NL2SQL11](https://huggingface.co/datasets/bugdaryan/sql-create-context-instruction) and a small collection of synthetic API calling datasets.\n- **Language Instruction Datasets:** We include high-quality datasets such as [HelpSteer](https://huggingface.co/datasets/nvidia/HelpSteer) and an open license-filtered version of [Platypus](https://huggingface.co/datasets/garage-bAInd/Open-Platypus). We also include a collection of hardcoded prompts to ensure our model generates correct outputs given inquiries about its name or developers.",
       "usage": "This is a simple example of how to use Granite-8B-Code-Instruct-4K model.\n\n```python\nimport torch\nfrom transformers import AutoModelForCausalLM, AutoTokenizer\ndevice = \"cuda\" # or \"cpu\"\nmodel_path = \"ibm-granite/granite-8b-code-instruct-4k\"\ntokenizer = AutoTokenizer.from_pretrained(model_path)\n# drop device_map if running on CPU\nmodel = AutoModelForCausalLM.from_pretrained(model_path, device_map=device)\nmodel.eval()\n# change input text as desired\nchat = [\n    { \"role\": \"user\", \"content\": \"Write a code to find the maximum value in a list of numbers.\" },\n]\nchat = tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)\n# tokenize the text\ninput_tokens = tokenizer(chat, return_tensors=\"pt\")\n# transfer tokenized inputs to the device\nfor i in input_tokens:\n    input_tokens[i] = input_tokens[i].to(device)\n# generate output tokens\noutput = model.generate(**input_tokens, max_new_tokens=100)\n# decode output tokens into text\noutput = tokenizer.batch_decode(output)\n# loop over the batch to print, in this example the batch size is 1\nfor i in output:\n    print(i)\n```\n*[Code Reference](https://huggingface.co/ibm-granite/granite-8b-code-instruct-4k#generation)*",

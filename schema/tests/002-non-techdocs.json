@@ -1,24 +1,29 @@
 {
     "modelServer": {
       "name": "developer-model-service",
-      "url": "https://example.com",
       "owner": "example-user",
       "description": "Developer model service running on vLLM",
+      "homepageURL": "https://model-service.apps.example.com",
       "usage": "Model server usage description",
       "tags": ["vLLM", "granite", "ibm"],
-      "apiURL": "https://api.example.com",
-      "apiType": "openapi",
-      "apiSpec": "https://raw.githubusercontent.com/redhat-ai-dev/model-catalog-example/refs/heads/main/developer-model-service/openapi.json",
-      "authentication": true,
-      "apiTags": ["openapi", "openai", "3scale"]
+      "API": {
+        "url": "https://api.model-service.apps.example.com",
+        "type": "openapi",
+        "spec": "https://raw.githubusercontent.com/redhat-ai-dev/model-catalog-example/refs/heads/main/developer-model-service/openapi.json",
+        "tags": ["openapi", "openai", "3scale"]
+      },
+      "lifecycle": "production",
+      "authentication": true
     },
-    "model": [
+    "models": [
       {
         "name": "ibm-granite-20b",
         "description": "IBM Granite 20b model running on vLLM",
-        "resourceURL": "https://huggingface.co/ibm-granite/granite-20b-code-instruct",
+        "artifactLocationURL": "https://huggingface.co/ibm-granite/granite-20b-code-instruct",
+        "howToUseURL": "https://model-service.apps.example.com/docs",
         "tags": ["IBM", "granite", "vllm", "20b"],
-        "owner": "example-user"
+        "owner": "example-user",
+        "lifecycle": "production"
       }
     ]
   }
