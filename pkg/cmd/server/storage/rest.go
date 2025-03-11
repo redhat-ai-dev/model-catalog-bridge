@@ -20,7 +20,7 @@ func SetupBridgeStorageRESTClient(hostURL, token string) *BridgeStorageRESTClien
 	b := &BridgeStorageRESTClient{
 		RESTClient:       resty.New(),
 		UpsertURL:        hostURL + util.UpsertURI,
-		CurrentKeySetURL: hostURL + util.CurrenKeySetURI,
+		CurrentKeySetURL: hostURL + util.CurrentKeySetURI,
 		Token:            token,
 	}
 	return b

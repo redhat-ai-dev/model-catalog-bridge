@@ -46,7 +46,7 @@ func NewStorageRESTServer(st types.BridgeStorage, bridgeURL, bridgeToken, bkstgU
 	r.TrustedPlatform = "X-Forwarded-For"
 	r.Use(addRequestId())
 	r.POST(util.UpsertURI, s.handleCatalogUpsertPost)
-	r.POST(util.CurrenKeySetURI, s.handleCatalogCurrentKeySetPost)
+	r.POST(util.CurrentKeySetURI, s.handleCatalogCurrentKeySetPost)
 	return s
 }
 
@@ -96,6 +96,17 @@ func (s *StorageRESTServer) del(key string) {
 	delete(s.pushedLocations, key)
 }
 
+// handleCatalogCurrentKeySetPost deals with removing model/version entries no longer recognized by our set
+// of metadata normalizers.  It pulls the list of keys in storage and if any of those keys in storage are not
+// in the current key set provided as input, removal processing is initiated.  That removal processing includes:
+//   - fetching the storage entry
+//   - remove the storage entry
+//   - based on the last version of the storage entry retrieved, if it has the location ID set, that means it was
+//     imported to backstage; at this time, we'll explicitly delete via the Backstage Catalog REST API; NOTE: we originally
+//     considered letting the EntityProvider for the bridge detect removed locations with its polling of the location service and
+//     deleting the location and its related components/resources/apis from the catalog (i.e. a less
+//     aggressive delete) but for a TBD reason deleting the location does not appear to be working form our EntityProvider
+//   - we then remove the entry from the location service
 func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 	key := c.Query("key")
 	// no content for the key QP means no models were discovered
@@ -124,7 +135,7 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 		_, ok := keyHash[k]
 		if !ok {
 			msg := ""
-			//TODO for summit we were not going to"aggressively" inform backstage of deletions by leveraging
+			//TODO for summit we were not going to "aggressively" inform backstage of deletions by leveraging
 			// the delete location catalog REST API; however, with location testing
 			// https://github.com/redhat-ai-dev/rhdh-plugins/blob/6b0c4a21c1cdfeba4cf2618d4aabadff544c7efc/workspaces/rhdh-ai/plugins/catalog-backend-module-rhdh-ai/src/providers/RHDHRHOAIEntityProvider.ts#L198-L202
 			// is not actually deleting locations with the latest testing.  So some provisional use of it for now
@@ -170,7 +181,13 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 	}
 
 	if len(errors) > 0 {
-
+		c.Status(http.StatusInternalServerError)
+		msg := ""
+		for _, e := range errors {
+			msg = fmt.Sprintf("%s;%s", msg, e.Error())
+		}
+		c.Error(fmt.Errorf(msg))
+		return
 	}
 	c.Status(http.StatusOK)
 }

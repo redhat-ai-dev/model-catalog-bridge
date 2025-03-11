@@ -218,7 +218,9 @@ func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconc
 		log.V(4).Info(fmt.Sprintf("initiating delete processing for %s", name.String()))
 		// now, delete of the inference service does not mean the model has been deleted from model registry,
 		// so we don't remove the model from our catalog, but may simply remove the URL associated with the inference
-		// service; initiate a KFMR poll to reset any entries which depended on our inference service here
+		// service; initiate a KFMR poll to remove any URLs/route from the model entries which depended on the inference service here; also,
+		// if the delete of the kserve inference service happened to result from an archiving of the model, the
+		// innerStart call will detect that and then initiate removal of the model from the storage and location services
 		b := []byte{}
 		buf := bytes.NewBuffer(b)
 		bwriter := bufio.NewWriter(buf)

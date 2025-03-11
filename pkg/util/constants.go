@@ -6,7 +6,7 @@ const (
 	StorageConfigMapName = "bac-import-model"
 	KeyQueryParam        = "key"
 	UpsertURI            = "/upsert"
-	CurrenKeySetURI      = "/currentkeyset"
+	CurrentKeySetURI     = "/currentkeyset"
 	RemoveURI            = "/remove"
 	ListURI              = "/list"
 )
