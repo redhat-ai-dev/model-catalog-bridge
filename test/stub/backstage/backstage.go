@@ -10,10 +10,11 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 )
 
-func CreateServer(t *testing.T) *httptest.Server {
+func CreateBackstageServerWithCallbackMap(callback *sync.Map, t *testing.T) *httptest.Server {
 	ts := common.CreateTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
@@ -108,11 +109,13 @@ func CreateServer(t *testing.T) *httptest.Server {
 					w.WriteHeader(500)
 					return
 				}
-				_, _ = w.Write([]byte(fmt.Sprintf(common.TestPostJSONStringOneLinePlusBody, data.Target)))
+				callback.Store("body", string(bodyBuf))
+				_, _ = w.Write([]byte(common.TestJSONSuccessfulBackstageLocationImportReturn))
 			}
 		case common.MethodDelete:
 			switch {
 			case strings.HasPrefix(r.URL.Path, rest.LOCATION_URI):
+				callback.Store("delete", "delete")
 				path := strings.TrimPrefix(r.URL.Path, rest.LOCATION_URI)
 				if strings.Contains(path, "404") {
 					w.WriteHeader(404)
@@ -125,6 +128,11 @@ func CreateServer(t *testing.T) *httptest.Server {
 	})
 
 	return ts
+
+}
+
+func CreateServer(t *testing.T) *httptest.Server {
+	return CreateBackstageServerWithCallbackMap(&sync.Map{}, t)
 }
 
 type Post struct {

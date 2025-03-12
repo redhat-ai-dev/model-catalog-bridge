@@ -87,6 +87,9 @@ func (s *StorageRESTServer) sync(key string) (*types.StorageBody, error) {
 		return sb, nil
 	}
 	ssb, err := s.st.Fetch(key)
+	if err == nil && len(ssb.LocationId) > 0 {
+		s.pushedLocations[key] = &ssb
+	}
 	return &ssb, err
 }
 
@@ -136,9 +139,9 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 		if !ok {
 			msg := ""
 			//TODO for summit we were not going to "aggressively" inform backstage of deletions by leveraging
-			// the delete location catalog REST API; however, with location testing
+			// the delete location catalog REST API; however, with local testing
 			// https://github.com/redhat-ai-dev/rhdh-plugins/blob/6b0c4a21c1cdfeba4cf2618d4aabadff544c7efc/workspaces/rhdh-ai/plugins/catalog-backend-module-rhdh-ai/src/providers/RHDHRHOAIEntityProvider.ts#L198-L202
-			// is not actually deleting locations with the latest testing.  So some provisional use of it for now
+			// is not actually deleting locations as expected.  So we are provisionally (we'll see if it is permananent after diagnosing the situation) using the catalog REST API to delete for now.
 			sb := types.StorageBody{}
 			sb, err = s.st.Fetch(k)
 			if err != nil {
@@ -192,6 +195,13 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+// handleCatalogUpsertPost deals with either creating or updating new model content in storage, as well as coordinating
+// that content with the location service and backstage.  It pulls the key from the query parameter and then
+//   - fetches the entry if exists in storage, populating our cache and syncing via a golang mutex to make the operation atomic,
+//     regardless if the backend store is transactional
+//   - stores the latest data for the new key in storage
+//   - updates the location service with the corresponding URI and content
+//   - if importing to backstage was not previously done, it does that, and then stores the ID returned form backstage in storage
 func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 	key := c.Query("key")
 	if len(key) == 0 {

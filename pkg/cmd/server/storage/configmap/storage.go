@@ -19,6 +19,14 @@ type ConfigMapBridgeStorage struct {
 	ns  string
 }
 
+func NewConfigMapBridgeStorageForTest(ns string, cl corev1client.CoreV1Interface) *ConfigMapBridgeStorage {
+	return &ConfigMapBridgeStorage{
+		cfg: nil,
+		cl:  cl,
+		ns:  ns,
+	}
+}
+
 func (c *ConfigMapBridgeStorage) Initialize(cfg *rest.Config) error {
 	c.cfg = cfg
 	c.cl = util.GetCoreClient(c.cfg)

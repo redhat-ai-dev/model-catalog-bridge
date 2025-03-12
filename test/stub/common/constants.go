@@ -1578,6 +1578,8 @@ const (
 const TestJSONStringRegisteredModelOneLineGet = `{"createTimeSinceEpoch":"1731103949567","customProperties":{"foo":{"metadataType":"MetadataStringValue","string_value":"bar"}},"description":"dummy model 1","id":"1","lastUpdateTimeSinceEpoch":"1731103975700","name":"model-1","Owner":"kube:admin","state":"LIVE"}`
 
 const (
+	TestJSONSuccessfulBackstageLocationImportReturn = `{"id":"e83bc2d8-0f1c-49f2-b65b-8bfbbbe29ae2", "target":"http://rhoai-bridge.com/mnist/v1/catalog-info.yaml", "type":"rhdh-rhoai-bridge"}`
+
 	TestJSONStringRegisteredModelOneLine = `{"items":[{"createTimeSinceEpoch":"1731103949567","customProperties":{"foo":{"metadataType":"MetadataStringValue","string_value":"bar"}},"description":"dummy model 1","id":"1","lastUpdateTimeSinceEpoch":"1731103975700","name":"model-1","Owner":"kube:admin","state":"LIVE"}],"nextPageToken":"","pageSize":0,"size":1}`
 
 	TestJSONStringModelVersionOneLine  = `{"items":[{"author":"kube:admin","createTimeSinceEpoch":"1731103949724","customProperties":{},"description":"version 1","id":"2","lastUpdateTimeSinceEpoch":"1731103949724","name":"v1","registeredModelId":"1","state":"LIVE"}],"nextPageToken":"","pageSize":0,"size":1}`
