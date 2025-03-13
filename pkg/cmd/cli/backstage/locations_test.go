@@ -40,7 +40,7 @@ func TestImportLocation(t *testing.T) {
 	ts := backstage.CreateServer(t)
 	defer ts.Close()
 
-	arg := "https://my-repo/my.yaml"
+	arg := "http://rhoai-bridge.com/mnist/v1/catalog-info.yaml"
 	retJSON, err := SetupBackstageTestRESTClient(ts).ImportLocation(arg)
 	common.AssertError(t, err)
 	str, err := SetupBackstageTestRESTClient(ts).PrintImportLocation(retJSON)

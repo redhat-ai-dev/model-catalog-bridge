@@ -38,6 +38,10 @@ func LoopOverKFMR(owner, lifecycle string, ids []string, writer io.Writer, kfmr 
 			return nil, nil, err
 		}
 		for _, rm := range rms {
+			if rm.State != nil && *rm.State == openapi.REGISTEREDMODELSTATE_ARCHIVED {
+				klog.V(4).Infof("LoopOverKFMR skipping archived registered model %s", rm.Name)
+				continue
+			}
 			var mvs []openapi.ModelVersion
 			var mas map[string][]openapi.ModelArtifact
 			mvs, mas, err = callKubeflowREST(*rm.Id, kfmr)
@@ -64,6 +68,10 @@ func LoopOverKFMR(owner, lifecycle string, ids []string, writer io.Writer, kfmr 
 				klog.Flush()
 				return nil, nil, err
 			}
+			if rm.State != nil && *rm.State == openapi.REGISTEREDMODELSTATE_ARCHIVED {
+				klog.V(4).Infof("LoopOverKFMR skipping archived registered model %s", rm.Name)
+				continue
+			}
 			var mvs []openapi.ModelVersion
 			var mas map[string][]openapi.ModelArtifact
 			mvs, mas, err = callKubeflowREST(*rm.Id, kfmr)
@@ -88,6 +96,10 @@ func callKubeflowREST(id string, kfmr *KubeFlowRESTClientWrapper) (mvs []openapi
 	}
 	ma = map[string][]openapi.ModelArtifact{}
 	for _, mv := range mvs {
+		if mv.State != nil && *mv.State == openapi.MODELVERSIONSTATE_ARCHIVED {
+			klog.V(4).Infof("callKubeflowREST skipping archived model version %s", mv.Name)
+			continue
+		}
 		var v []openapi.ModelArtifact
 		v, err = kfmr.ListModelArtifacts(*mv.Id)
 		if err != nil {

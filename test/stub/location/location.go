@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 )
 
@@ -17,15 +18,18 @@ func SetupBridgeLocationRESTClient(ts *httptest.Server) *bridgeclient.BridgeLoca
 	bkstgTC := &bridgeclient.BridgeLocationRESTClient{}
 	bkstgTC.RESTClient = common.DC()
 	bkstgTC.UpsertURL = ts.URL
+	bkstgTC.RemoveURL = ts.URL
 	return bkstgTC
 }
 
-func CreateBridgeLocationServer(t *testing.T) *httptest.Server {
+func CreateBridgeLocationServerWithCallbackMap(callback *sync.Map, t *testing.T) *httptest.Server {
 	ts := common.CreateTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
 		switch r.Method {
+		case common.MethodDelete:
+			callback.Store("delete", "delete")
 		case common.MethodPost:
 			switch r.URL.Path {
 			default:
@@ -52,6 +56,7 @@ func CreateBridgeLocationServer(t *testing.T) *httptest.Server {
 					w.WriteHeader(500)
 					return
 				}
+				callback.Store("body", string(bodyBuf))
 				_, _ = w.Write([]byte(fmt.Sprintf(common.TestPostJSONStringOneLinePlusBody, data.Target)))
 				w.WriteHeader(201)
 
@@ -59,4 +64,8 @@ func CreateBridgeLocationServer(t *testing.T) *httptest.Server {
 		}
 	})
 	return ts
+}
+
+func CreateBridgeLocationServer(t *testing.T) *httptest.Server {
+	return CreateBridgeLocationServerWithCallbackMap(&sync.Map{}, t)
 }

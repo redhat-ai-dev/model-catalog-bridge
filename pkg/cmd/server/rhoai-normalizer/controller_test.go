@@ -1,6 +1,8 @@
 package rhoai_normalizer
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	serverapiv1beta1 "github.com/kserve/kserve/pkg/apis/serving/v1beta1"
@@ -184,7 +186,10 @@ func TestStart(t *testing.T) {
 		}
 		r.client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 
-		r.innerStart(ctx)
+		b := []byte{}
+		buf := bytes.NewBuffer(b)
+		bwriter := bufio.NewWriter(buf)
+		r.innerStart(ctx, buf, bwriter)
 
 		found := false
 		callback.Range(func(key, value any) bool {
@@ -197,6 +202,65 @@ func TestStart(t *testing.T) {
 			return true
 		})
 		common.AssertEqual(t, found, true)
+		common.AssertEqual(t, true, len(buf.Bytes()) > 0)
+	}
+
+}
+
+func TestStartArchived(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = serverapiv1beta1.AddToScheme(scheme)
+	kts1 := kfmr.CreateGetServerArchived(t)
+	defer kts1.Close()
+	brts := location.CreateBridgeLocationServer(t)
+	defer brts.Close()
+	callback := sync.Map{}
+	bsts := storage.CreateBridgeStorageRESTClient(t, &callback)
+	defer bsts.Close()
+
+	r := &RHOAINormalizerReconcile{
+		scheme:        scheme,
+		eventRecorder: nil,
+		k8sToken:      "",
+		myNS:          "",
+		routeClient:   nil,
+		kfmrRoute: &routev1.Route{
+			Spec: routev1.RouteSpec{
+				Host: "http://foo.com",
+			},
+			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
+		},
+		storage: storage.SetupBridgeStorageRESTClient(bsts),
+	}
+
+	for _, tc := range []struct {
+		name string
+	}{
+		{
+			name: "not deployed, only registered model, model version, model artifact",
+		},
+	} {
+		ctx := context.TODO()
+		cfg := &config.Config{}
+		kfmr.SetupKubeflowTestRESTClient(kts1, cfg)
+		r.kfmr = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
+		r.client = fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		b := []byte{}
+		buf := bytes.NewBuffer(b)
+		bwriter := bufio.NewWriter(buf)
+		r.innerStart(ctx, buf, bwriter)
+
+		found := false
+		callback.Range(func(key, value any) bool {
+			found = true
+			t.Logf(fmt.Sprintf("found key %s value %s for test %s", key, value, tc.name))
+
+			return true
+		})
+		// callback should not have any entries since we should not have called the storage tier
+		common.AssertEqual(t, found, false)
+		common.AssertEqual(t, true, len(buf.Bytes()) == 0)
 	}
 
 }

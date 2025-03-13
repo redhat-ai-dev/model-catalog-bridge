@@ -19,17 +19,25 @@ type ConfigMapBridgeStorage struct {
 	ns  string
 }
 
+func NewConfigMapBridgeStorageForTest(ns string, cl corev1client.CoreV1Interface) *ConfigMapBridgeStorage {
+	return &ConfigMapBridgeStorage{
+		cfg: nil,
+		cl:  cl,
+		ns:  ns,
+	}
+}
+
 func (c *ConfigMapBridgeStorage) Initialize(cfg *rest.Config) error {
 	c.cfg = cfg
 	c.cl = util.GetCoreClient(c.cfg)
 	c.ns = util.GetCurrentProject()
-	_, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), "bac-import-model", metav1.GetOptions{})
+	_, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 	if err != nil {
 		cm := &corev1.ConfigMap{}
-		cm.Name = "bac-import-model"
+		cm.Name = util.StorageConfigMapName
 		_, err = c.cl.ConfigMaps(c.ns).Create(context.Background(), cm, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -39,7 +47,7 @@ func (c *ConfigMapBridgeStorage) Initialize(cfg *rest.Config) error {
 }
 
 func (c *ConfigMapBridgeStorage) Upsert(key string, value types.StorageBody) error {
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), "bac-import-model", metav1.GetOptions{})
+	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -57,7 +65,7 @@ func (c *ConfigMapBridgeStorage) Upsert(key string, value types.StorageBody) err
 }
 
 func (c *ConfigMapBridgeStorage) Fetch(key string) (types.StorageBody, error) {
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), "bac-import-model", metav1.GetOptions{})
+	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
 	sb := types.StorageBody{}
 	if err != nil {
 		return sb, err
@@ -75,7 +83,7 @@ func (c *ConfigMapBridgeStorage) Fetch(key string) (types.StorageBody, error) {
 }
 
 func (c *ConfigMapBridgeStorage) Remove(key string) error {
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), "bac-import-model", metav1.GetOptions{})
+	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -85,4 +93,16 @@ func (c *ConfigMapBridgeStorage) Remove(key string) error {
 	delete(cm.BinaryData, key)
 	_, err = c.cl.ConfigMaps(c.ns).Update(context.Background(), cm, metav1.UpdateOptions{})
 	return err
+}
+
+func (c *ConfigMapBridgeStorage) List() ([]string, error) {
+	keys := []string{}
+	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return keys, err
+	}
+	for key := range cm.BinaryData {
+		keys = append(keys, key)
+	}
+	return keys, nil
 }

@@ -69,3 +69,30 @@ func CreateGetServerWithInference(t *testing.T) *httptest.Server {
 	return ts
 
 }
+
+func CreateGetServerArchived(t *testing.T) *httptest.Server {
+	ts := common.CreateTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case common.MethodGet:
+			switch {
+			case strings.HasSuffix(r.URL.Path, rest.LIST_REG_MODEL_URI):
+				_, _ = w.Write([]byte(common.MnistRegisteredModelsArchived))
+			case strings.HasSuffix(r.URL.Path, "versions"):
+				_, _ = w.Write([]byte(common.MnistModelVersionsArchived))
+			case strings.HasSuffix(r.URL.Path, "artifacts"):
+				_, _ = w.Write([]byte(common.MnistModelArtifactsArchived))
+			case strings.Contains(r.URL.Path, "versions"):
+				_, _ = w.Write([]byte(common.MnistModelVersionGetArchived))
+			case strings.Contains(r.URL.Path, "artifacts"):
+				_, _ = w.Write([]byte(common.MnistModelArtifactsGetArchived))
+			}
+		}
+	})
+
+	return ts
+
+}
