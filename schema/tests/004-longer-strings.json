@@ -1,7 +1,6 @@
 {
   "modelServer": {
     "name": "developer-model-service",
-    "url": "https://example.com",
     "owner": "example-user",
     "description": "Developer model service running on vLLM",
     "usage": "Model server usage description",
@@ -13,8 +12,7 @@
       "tags": ["openapi", "openai", "3scale"]
     },
     "lifecycle": "production",
-    "authentication": true,
-    "apiTags": ["openapi", "openai", "3scale"]
+    "authentication": true
   },
   "models": [
     {

@@ -1,7 +1,6 @@
 {
     "modelServer": {
       "name": "developer-model-service",
-      "url": "https://example.com",
       "owner": "example-user",
       "description": "Developer model service running on vLLM",
       "usage": "Model server usage description",
