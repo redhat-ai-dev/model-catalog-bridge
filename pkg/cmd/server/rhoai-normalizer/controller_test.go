@@ -9,6 +9,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/cmd/cli/kubeflowmodelregistry"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/config"
+	types2 "github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
 	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/common"
 	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/kfmr"
 	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/location"
@@ -44,6 +45,7 @@ func TestReconcile(t *testing.T) {
 		myNS:          "",
 		routeClient:   nil,
 		storage:       storage.SetupBridgeStorageRESTClient(bsts),
+		format:        types2.JsonArrayForamt,
 	}
 
 	for _, tc := range []struct {
@@ -61,8 +63,8 @@ func TestReconcile(t *testing.T) {
 				Spec:       serverapiv1beta1.InferenceServiceSpec{},
 				Status:     serverapiv1beta1.InferenceServiceStatus{},
 			},
-			//TODO set expectedFound to true and check for this expectedValue with kserve-only is readded after summit
-			//expectedValue: "description: KServe instance foo:bar",
+			//TODO set expectedFound to true and check for this expectedValue with kserve-only is re-added after summit
+			//expectedValue: "KServe instance foo:bar",
 		},
 		{
 			name: "kserve inference service with kubeflow route but not kubeflow inference service",
@@ -78,8 +80,8 @@ func TestReconcile(t *testing.T) {
 				Status:     serverapiv1beta1.InferenceServiceStatus{},
 			},
 			kfmrSvr: kts2,
-			//TODO set expectedFound to true and check for this expectedValue with kserve-only is readded after summit
-			//expectedValue: "description: KServe instance faa:bor",
+			//TODO set expectedFound to true and check for this expectedValue with kserve-only is re-added after summit
+			//expectedValue: "KServe instance faa:bor",
 		},
 		{
 			name: "kserve inference service with kubeflow route and kubeflow inference service",
@@ -96,7 +98,7 @@ func TestReconcile(t *testing.T) {
 			},
 			kfmrSvr:       kts1,
 			expectedFound: true,
-			expectedValue: "url: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx",
+			expectedValue: "https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx",
 		},
 	} {
 		ctx := context.TODO()
@@ -149,6 +151,8 @@ func TestStart(t *testing.T) {
 			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
 		},
 		storage: storage.SetupBridgeStorageRESTClient(bsts),
+		//TODO for now letting TestReconcile handle Json Array and this handle catalog-info.yaml, but eventually may just do json array everywhere
+		format: types2.CatalogInfoYamlFormat,
 	}
 
 	for _, tc := range []struct {
@@ -235,6 +239,8 @@ func TestStartArchived(t *testing.T) {
 			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
 		},
 		storage: storage.SetupBridgeStorageRESTClient(bsts),
+		//TODO eventually switch the defaulting to json array
+		format: types2.CatalogInfoYamlFormat,
 	}
 
 	for _, tc := range []struct {

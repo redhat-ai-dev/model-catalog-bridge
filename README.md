@@ -35,6 +35,7 @@ Either via the command line, or from your favorite Golang editor, set the follow
 3. `MR_ROUTE` - the name of the Model Registry route in the `istio-system` namespace. For now, use `odh-model-registries-modelregistry-public-rest`.
 4. `NAMESPACE` - the name of the namespace you create for deploying AI models from ODH
 5. `STORAGE_URL` - for now, just use `http://localhost:7070`; this will be updated when we can run this container in OCP as part of the RHDH plugin running in RHDH
+6. `NORMALIZER_FORMAT` - can either be `JsonArrayFormat` for our new format from the `schema` folder, or the legacy `CatalogInfoYamlFormat`; if not set defaults to `CatalogInfoYamlFormat` until RHDHPAI-611 and RHDHPAI-612 are completed.
 
 ### storage-rest
 

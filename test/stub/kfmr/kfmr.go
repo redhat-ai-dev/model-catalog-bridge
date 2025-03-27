@@ -1,6 +1,7 @@
 package kfmr
 
 import (
+	"fmt"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/config"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/rest"
 	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/common"
@@ -50,6 +51,8 @@ func CreateGetServerWithInference(t *testing.T) *httptest.Server {
 			switch {
 			case strings.HasSuffix(r.URL.Path, rest.LIST_REG_MODEL_URI):
 				_, _ = w.Write([]byte(common.MnistRegisteredModels))
+			case strings.HasSuffix(r.URL.Path, fmt.Sprintf("%s/%s", rest.LIST_REG_MODEL_URI, "1")):
+				_, _ = w.Write([]byte(common.MnistRegisteredModelsGet))
 			case strings.HasSuffix(r.URL.Path, "versions"):
 				_, _ = w.Write([]byte(common.MnistModelVersions))
 			case strings.HasSuffix(r.URL.Path, "artifacts"):

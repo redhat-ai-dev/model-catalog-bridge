@@ -3,13 +3,84 @@ package kubeflowmodelregistry
 import (
 	"bufio"
 	"bytes"
+	serverapiv1beta1 "github.com/kserve/kserve/pkg/apis/serving/v1beta1"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/config"
+	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
 	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/common"
 	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/kfmr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"knative.dev/pkg/apis"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"testing"
 )
 
-func TestLookOverKFMR(t *testing.T) {
+func TestLoopOverKRMR_JsonArray(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = serverapiv1beta1.AddToScheme(scheme)
+	ts := kfmr.CreateGetServerWithInference(t)
+	defer ts.Close()
+	for _, tc := range []struct {
+		args []string
+		// we do output compare in chunks as ranges over the components status map are non-deterministic wrt order
+		outStr []string
+		is     *serverapiv1beta1.InferenceService
+	}{
+		{
+			args:   []string{"Owner", "Lifecycle"},
+			outStr: []string{jsonListOutput},
+		},
+		{
+			args:   []string{"Owner", "Lifecycle", "1"},
+			outStr: []string{jsonListOutput},
+		},
+		{
+			args:   []string{"Owner", "Lifecycle"},
+			outStr: []string{jsonListWithInferenceOutput},
+			is: &serverapiv1beta1.InferenceService{
+				ObjectMeta: metav1.ObjectMeta{
+					// see test/stub/common/MnistInferenceServices and test/stub/common/MinstServingEnvironment
+					Namespace: "ggmtest",
+					Name:      "mnist-v1",
+				},
+				Spec: serverapiv1beta1.InferenceServiceSpec{},
+				Status: serverapiv1beta1.InferenceServiceStatus{URL: &apis.URL{
+					Scheme: "https",
+					Host:   "kserve.com",
+				}},
+			},
+		},
+	} {
+		cfg := &config.Config{}
+		kfmr.SetupKubeflowTestRESTClient(ts, cfg)
+		k := SetupKubeflowRESTClient(cfg)
+		owner := tc.args[0]
+		lifecycle := tc.args[1]
+		ids := []string{}
+		if len(tc.args) > 2 {
+			ids = tc.args[2:]
+		}
+		b := []byte{}
+		buf := bytes.NewBuffer(b)
+		bwriter := bufio.NewWriter(buf)
+		var cl client.Client
+		if tc.is != nil {
+			objs := []client.Object{tc.is}
+			cl = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+		}
+		_, _, err := LoopOverKFMR(owner, lifecycle, ids, bwriter, types.JsonArrayForamt, k, cl)
+		common.AssertError(t, err)
+		bwriter.Flush()
+		outstr := buf.String()
+		for _, str := range tc.outStr {
+			common.AssertLineCompare(t, outstr, str, 0)
+		}
+
+	}
+}
+
+func TestLoopOverKFMR_CatalogInfoYaml(t *testing.T) {
 	ts := kfmr.CreateGetServer(t)
 	defer ts.Close()
 	for _, tc := range []struct {
@@ -38,7 +109,7 @@ func TestLookOverKFMR(t *testing.T) {
 		b := []byte{}
 		buf := bytes.NewBuffer(b)
 		bwriter := bufio.NewWriter(buf)
-		_, _, err := LoopOverKFMR(owner, lifecycle, ids, bwriter, k, nil)
+		_, _, err := LoopOverKFMR(owner, lifecycle, ids, bwriter, types.CatalogInfoYamlFormat, k, nil)
 		common.AssertError(t, err)
 		bwriter.Flush()
 		outstr := buf.String()
@@ -51,6 +122,35 @@ func TestLookOverKFMR(t *testing.T) {
 }
 
 const (
+	jsonListWithInferenceOutput = `modelServer:
+  API:
+    spec: ""
+    type: openapi
+    url: https://kserve.com
+  authentication: false
+  description: ""
+  lifecycle: development
+  name: mnist-v1/8c2c357f-bf82-4d2d-a254-43eca96fd31d
+  owner: rhdh-rhoai-bridge
+  tags:
+  - _lastModified
+models:
+- artifactLocationURL: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx
+  description: ""
+  lifecycle: Lifecycle
+  name: v1
+  owner: rhdh-rhoai-bridge
+  tags:
+  - _lastModified`
+	jsonListOutput = `models:
+- artifactLocationURL: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx
+  description: ""
+  lifecycle: Lifecycle
+  name: v1
+  owner: rhdh-rhoai-bridge
+  tags:
+  - _lastModified
+`
 	listOutput = `apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:

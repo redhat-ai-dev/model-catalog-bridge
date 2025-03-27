@@ -16,6 +16,7 @@ import (
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/cmd/cli/kubeflowmodelregistry"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/cmd/server/storage"
 	bridgerest "github.com/redhat-ai-dev/model-catalog-bridge/pkg/rest"
+	types2 "github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/util"
 	"io"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -127,6 +128,7 @@ func (r *RHOAINormalizerReconcile) setupKFMR(ctx context.Context) bool {
 
 func SetupController(ctx context.Context, mgr ctrl.Manager, cfg *rest.Config, pprofPort string) error {
 	filter := &RHOAINormalizerFilter{}
+	formatEnv := os.Getenv(types2.FormatEnvVar)
 	reconciler := &RHOAINormalizerReconcile{
 		client:        mgr.GetClient(),
 		scheme:        mgr.GetScheme(),
@@ -134,6 +136,15 @@ func SetupController(ctx context.Context, mgr ctrl.Manager, cfg *rest.Config, pp
 		k8sToken:      util.GetCurrentToken(cfg),
 		routeClient:   routeclient.NewForConfigOrDie(cfg),
 		storage:       storage.SetupBridgeStorageRESTClient(os.Getenv("STORAGE_URL"), util.GetCurrentToken(cfg)),
+		format:        types2.NormalizerFormat(formatEnv),
+	}
+
+	switch reconciler.format {
+	case types2.JsonArrayForamt:
+	case types2.CatalogInfoYamlFormat:
+	default:
+		//TODO eventually switch the defaulting to json array
+		reconciler.format = types2.CatalogInfoYamlFormat
 	}
 
 	reconciler.myNS = util.GetCurrentProject()
@@ -199,6 +210,7 @@ type RHOAINormalizerReconcile struct {
 	routeClient   *routeclient.RouteV1Client
 	kfmr          *kubeflowmodelregistry.KubeFlowRESTClientWrapper
 	storage       *storage.BridgeStorageRESTClient
+	format        types2.NormalizerFormat
 }
 
 func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -353,7 +365,8 @@ func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.N
 							is,
 							r.kfmr,
 							r.client,
-							bwriter)
+							bwriter,
+							r.format)
 
 						if err != nil {
 							return "", "", err
@@ -404,7 +417,7 @@ func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context, buf *bytes.Bu
 	var mvs map[string][]openapi.ModelVersion
 
 	//TODO what do we do with owner/lifecycle when we poll
-	rms, mvs, err = kubeflowmodelregistry.LoopOverKFMR(util.DefaultOwner, util.DefaultLifecycle, []string{}, bwriter, r.kfmr, r.client)
+	rms, mvs, err = kubeflowmodelregistry.LoopOverKFMR(util.DefaultOwner, util.DefaultLifecycle, []string{}, bwriter, r.format, r.kfmr, r.client)
 	if err != nil {
 		controllerLog.Error(err, "err looping over KFMR")
 		return
@@ -416,9 +429,9 @@ func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context, buf *bytes.Bu
 			continue
 		}
 		for _, mv := range mva {
-			importKey := rm.Name + "_" + mv.Name
+
+			importKey, importURI := util.BuildImportKeyAndURI(rm.Name, mv.Name)
 			keys = append(keys, importKey)
-			importURI := "/" + rm.Name + "/" + mv.Name + "/catalog-info.yaml"
 			err = r.processBWriter(ctx, bwriter, buf, importKey, importURI)
 			if err != nil {
 				controllerLog.Error(err, "error processing KFMR writer")

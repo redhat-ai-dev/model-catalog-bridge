@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sigs.k8s.io/yaml"
+	"strings"
 	"syscall"
 )
 
@@ -58,5 +59,8 @@ func ProcessOutput(str string, err error) {
 }
 
 func BuildImportKeyAndURI(seg1, seg2 string) (string, string) {
+	// no spaces in keys
+	seg1 = strings.ReplaceAll(seg1, " ", "")
+	seg2 = strings.ReplaceAll(seg2, " ", "")
 	return fmt.Sprintf("%s_%s", seg1, seg2), fmt.Sprintf("/%s/%s/catalog-info.yaml", seg1, seg2)
 }

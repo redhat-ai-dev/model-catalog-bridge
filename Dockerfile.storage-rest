@@ -8,7 +8,7 @@ COPY go.sum go.sum
 COPY vendor/ vendor/
 COPY cmd/ cmd/
 COPY pkg/ pkg/
-COPY test/ test/
+COPY schema/ schema
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -o storage-rest ./cmd/storage-rest/...
 
