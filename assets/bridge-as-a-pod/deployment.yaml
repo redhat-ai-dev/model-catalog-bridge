@@ -24,7 +24,7 @@ spec:
         app: bac-import-model
     spec:
       containers:
-      - image: quay.io/gabemontero/import-location:latest
+      - image: quay.io/gabemontero/model-catalog-bridge-location:latest
         imagePullPolicy: Always
         name: location
         ports:

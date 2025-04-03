@@ -12,7 +12,9 @@ COPY schema/ schema
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -o rhoai-normalizer ./cmd/rhoai-normalizer/...
 
-FROM registry.access.redhat.com/ubi9-minimal:9.1.0
+FROM quay.io/openshift/origin-cli:4.16
+
+RUN dnf install -y jq
 
 COPY --from=builder /opt/app-root/src/rhoai-normalizer /usr/local/bin/rhoai-normalizer
 

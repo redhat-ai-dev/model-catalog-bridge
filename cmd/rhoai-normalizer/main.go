@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/cmd/server/rhoai-normalizer"
+	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/util"
 
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -39,11 +40,13 @@ func main() {
 	mainLog = ctrl.Log.WithName("main")
 
 	ctx := ctrl.SetupSignalHandler()
-	restConfig := ctrl.GetConfigOrDie()
+	restConfig, err := util.InClusterConfigHackForRHDHSidecars()
+	if restConfig == nil || err != nil {
+		restConfig = ctrl.GetConfigOrDie()
+	}
 	restConfig.QPS = 50
 	restConfig.Burst = 50
 	var mgr ctrl.Manager
-	var err error
 	mopts := ctrl.Options{}
 
 	mgr, err = rhoai_normalizer.NewControllerManager(ctx, restConfig, mopts, pprofAddr)

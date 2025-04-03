@@ -1,0 +1,92 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rhdh-rhoai-bridge
+  namespace: ai-rhdh
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rhdh-rhoai-bridge
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+  - apiGroups:
+      - route.openshift.io
+    resources:
+      - routes
+    verbs:
+      - get
+      - list
+      - watch
+
+  - apiGroups: ["serving.kserve.io"]
+    resources: ["inferenceservices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rhdh-rhoai-bridge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rhdh-rhoai-bridge
+subjects:
+  - kind: ServiceAccount
+    name: rhdh-rhoai-bridge
+    namespace: ai-rhdh
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rhdh-odh-dashboard-permissions
+  namespace: odh-model-registries
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-user-modelregistry-public
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:serviceaccounts:ai-rhdh
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rhdh-rhoai-bridge
+  namespace: ai-rhdh
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rhdh-rhoai-bridge
+subjects:
+  - kind: ServiceAccount
+    name: rhdh-rhoai-bridge
+    namespace: ai-rhdh
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rhdh-rhoai-bridge
+  namespace: ai-rhdh
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rhdh-rhoai-bridge-token
+  namespace: ai-rhdh
+  annotations:
+    kubernetes.io/service-account.name: rhdh-rhoai-bridge
+type: kubernetes.io/service-account-token

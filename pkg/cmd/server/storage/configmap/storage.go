@@ -1,108 +1,112 @@
 package configmap
 
 import (
-	"context"
-	"encoding/json"
-	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
-	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/util"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+     "context"
+     "encoding/json"
+     "github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
+     "github.com/redhat-ai-dev/model-catalog-bridge/pkg/util"
+     corev1 "k8s.io/api/core/v1"
+     "k8s.io/apimachinery/pkg/api/errors"
+     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+     corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+     "k8s.io/klog/v2"
 
-	"k8s.io/client-go/rest"
+     "k8s.io/client-go/rest"
 )
 
 type ConfigMapBridgeStorage struct {
-	cfg *rest.Config
-	cl  corev1client.CoreV1Interface
-	ns  string
+     cfg *rest.Config
+     cl  corev1client.CoreV1Interface
+     ns  string
 }
 
 func NewConfigMapBridgeStorageForTest(ns string, cl corev1client.CoreV1Interface) *ConfigMapBridgeStorage {
-	return &ConfigMapBridgeStorage{
-		cfg: nil,
-		cl:  cl,
-		ns:  ns,
-	}
+     return &ConfigMapBridgeStorage{
+          cfg: nil,
+          cl:  cl,
+          ns:  ns,
+     }
 }
 
 func (c *ConfigMapBridgeStorage) Initialize(cfg *rest.Config) error {
-	c.cfg = cfg
-	c.cl = util.GetCoreClient(c.cfg)
-	c.ns = util.GetCurrentProject()
-	_, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-	if err != nil {
-		cm := &corev1.ConfigMap{}
-		cm.Name = util.StorageConfigMapName
-		_, err = c.cl.ConfigMaps(c.ns).Create(context.Background(), cm, metav1.CreateOptions{})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+     c.cfg = cfg
+     c.cl = util.GetCoreClient(c.cfg)
+     c.ns = util.GetCurrentProject()
+     klog.Infof("getting cfg map in %s ns", c.ns)
+     _, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
+     klog.Infof("getting cfg map err %#v", err)
+     if err != nil && !errors.IsNotFound(err) {
+          return err
+     }
+     if err != nil {
+          cm := &corev1.ConfigMap{}
+          cm.Name = util.StorageConfigMapName
+          _, err = c.cl.ConfigMaps(c.ns).Create(context.Background(), cm, metav1.CreateOptions{})
+          klog.Infof("create cfg map err %#v", err)
+          if err != nil {
+               return err
+          }
+     }
+     return nil
 }
 
 func (c *ConfigMapBridgeStorage) Upsert(key string, value types.StorageBody) error {
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	if cm.BinaryData == nil {
-		cm.BinaryData = map[string][]byte{}
-	}
-	buf := []byte{}
-	buf, err = json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	cm.BinaryData[key] = buf
-	_, err = c.cl.ConfigMaps(c.ns).Update(context.Background(), cm, metav1.UpdateOptions{})
-	return err
+     cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
+     if err != nil {
+          return err
+     }
+     if cm.BinaryData == nil {
+          cm.BinaryData = map[string][]byte{}
+     }
+     buf := []byte{}
+     buf, err = json.Marshal(value)
+     if err != nil {
+          return err
+     }
+     cm.BinaryData[key] = buf
+     _, err = c.cl.ConfigMaps(c.ns).Update(context.Background(), cm, metav1.UpdateOptions{})
+     return err
 }
 
 func (c *ConfigMapBridgeStorage) Fetch(key string) (types.StorageBody, error) {
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
-	sb := types.StorageBody{}
-	if err != nil {
-		return sb, err
-	}
-	if cm.BinaryData == nil {
-		return sb, nil
-	}
+     cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
+     sb := types.StorageBody{}
+     if err != nil {
+          return sb, err
+     }
+     if cm.BinaryData == nil {
+          return sb, nil
+     }
 
-	buf, ok := cm.BinaryData[key]
-	if !ok {
-		return sb, nil
-	}
-	err = json.Unmarshal(buf, &sb)
-	return sb, err
+     buf, ok := cm.BinaryData[key]
+     if !ok {
+          return sb, nil
+     }
+     err = json.Unmarshal(buf, &sb)
+     return sb, err
 }
 
 func (c *ConfigMapBridgeStorage) Remove(key string) error {
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	if cm.BinaryData == nil {
-		return nil
-	}
-	delete(cm.BinaryData, key)
-	_, err = c.cl.ConfigMaps(c.ns).Update(context.Background(), cm, metav1.UpdateOptions{})
-	return err
+     cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
+     if err != nil {
+          return err
+     }
+     if cm.BinaryData == nil {
+          return nil
+     }
+     delete(cm.BinaryData, key)
+     _, err = c.cl.ConfigMaps(c.ns).Update(context.Background(), cm, metav1.UpdateOptions{})
+     return err
 }
 
 func (c *ConfigMapBridgeStorage) List() ([]string, error) {
-	keys := []string{}
-	cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return keys, err
-	}
-	for key := range cm.BinaryData {
-		keys = append(keys, key)
-	}
-	return keys, nil
+     keys := []string{}
+     cm, err := c.cl.ConfigMaps(c.ns).Get(context.Background(), util.StorageConfigMapName, metav1.GetOptions{})
+     if err != nil {
+          return keys, err
+     }
+     for key := range cm.BinaryData {
+          keys = append(keys, key)
+     }
+     return keys, nil
 }

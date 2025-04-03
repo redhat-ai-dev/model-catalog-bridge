@@ -109,15 +109,26 @@ func (p *pprof) Start(ctx context.Context) error {
 func (r *RHOAINormalizerReconcile) setupKFMR(ctx context.Context) bool {
 	if r.kfmrRoute == nil || len(r.kfmrRoute.Status.Ingress) == 0 {
 		var err error
-		r.kfmrRoute, err = r.routeClient.Routes("istio-system").Get(ctx, os.Getenv("MR_ROUTE"), metav1.GetOptions{})
+		rr := strings.NewReplacer("\r", "", "\n", "")
+		mrRoute := os.Getenv("MR_ROUTE")
+		rr.Replace(mrRoute)
+
+		r.kfmrRoute, err = r.routeClient.Routes("istio-system").Get(ctx, mrRoute, metav1.GetOptions{})
 		if err != nil {
 			controllerLog.Error(err, "error fetching model registry route")
 			return false
 		}
 	}
 	if r.kfmrRoute != nil && len(r.kfmrRoute.Status.Ingress) > 0 && r.kfmr == nil {
+		//TODO fallback until we have the gitops style of KFMR permissions nailed down
+		rr := strings.NewReplacer("\r", "", "\n", "")
+		kfmrToken := os.Getenv("KFMR_TOKEN")
+		kfmrToken = rr.Replace(kfmrToken)
+		if len(kfmrToken) == 0 {
+			kfmrToken = r.k8sToken
+		}
 		r.kfmr = &kubeflowmodelregistry.KubeFlowRESTClientWrapper{
-			Token:      r.k8sToken,
+			Token:      kfmrToken,
 			RootURL:    "https://" + r.kfmrRoute.Status.Ingress[0].Host + bridgerest.KFMR_BASE_URI,
 			RESTClient: resty.New(),
 		}
@@ -129,13 +140,23 @@ func (r *RHOAINormalizerReconcile) setupKFMR(ctx context.Context) bool {
 func SetupController(ctx context.Context, mgr ctrl.Manager, cfg *rest.Config, pprofPort string) error {
 	filter := &RHOAINormalizerFilter{}
 	formatEnv := os.Getenv(types2.FormatEnvVar)
+	r := strings.NewReplacer("\r", "", "\n", "")
+	formatEnv = r.Replace(formatEnv)
+	storageURL := os.Getenv("STORAGE_URL")
+	storageURL = r.Replace(storageURL)
+	if len(storageURL) == 0 {
+		podIP := os.Getenv("POD_IP")
+		podIP = r.Replace(podIP)
+		storageURL = fmt.Sprintf("http://%s:7070", podIP)
+		klog.Infof("using %s for the storage URL per our sidecar hack", storageURL)
+	}
 	reconciler := &RHOAINormalizerReconcile{
 		client:        mgr.GetClient(),
 		scheme:        mgr.GetScheme(),
 		eventRecorder: mgr.GetEventRecorderFor("RHOAINormalizer"),
 		k8sToken:      util.GetCurrentToken(cfg),
 		routeClient:   routeclient.NewForConfigOrDie(cfg),
-		storage:       storage.SetupBridgeStorageRESTClient(os.Getenv("STORAGE_URL"), util.GetCurrentToken(cfg)),
+		storage:       storage.SetupBridgeStorageRESTClient(storageURL, util.GetCurrentToken(cfg)),
 		format:        types2.NormalizerFormat(formatEnv),
 	}
 
@@ -150,7 +171,10 @@ func SetupController(ctx context.Context, mgr ctrl.Manager, cfg *rest.Config, pp
 	reconciler.myNS = util.GetCurrentProject()
 
 	var err error
-	reconciler.kfmrRoute, err = reconciler.routeClient.Routes("istio-system").Get(context.TODO(), os.Getenv("MR_ROUTE"), metav1.GetOptions{})
+	mrRoute := os.Getenv("MR_ROUTE")
+	rr := strings.NewReplacer("\r", "", "\n", "")
+	mrRoute = rr.Replace(mrRoute)
+	reconciler.kfmrRoute, err = reconciler.routeClient.Routes("istio-system").Get(context.TODO(), mrRoute, metav1.GetOptions{})
 	if err == nil {
 		controllerLog.Error(err, "error getting model registry route, will try again later")
 	}
@@ -352,6 +376,11 @@ func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.N
 						if err != nil {
 							log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model version %s", name.String(), mvId))
 							// don't just continue, try to build a catalog entry with the subset of info available
+						}
+
+						if mv == nil || ma == nil {
+							log.Info(fmt.Sprintf("either mv %#v or ma %#v is nil, bypassing CallBackstagePrinters", mv, ma))
+							continue
 						}
 
 						//TODO do we mandate a prop be set on the RM or MV for owner,lifecycle?
