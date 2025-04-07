@@ -44,10 +44,12 @@ Either via the command line, or from your favorite Golang editor, set the follow
 3. `BRIDGE_URL` - for now, just use `http://localhost:9090`; this is the REST endpoint of our `location` container
 4. `STORAGE_TYPE` - for now, only the development mode `ConfigMap` is supported; we'll add `GitHub` soon
 5. `K8S_TOKEN`, `KUBECONFIG`, and `NAMESPACE` are the same as above
+6. `NORMALIZER_FORMAT` - can either be `JsonArrayFormat` for our new format from the `schema` folder, or the legacy `CatalogInfoYamlFormat`; if not set defaults to `CatalogInfoYamlFormat` until RHDHPAI-611 and RHDHPAI-612 are completed.
 
 ### location
 
 1. `STORAGE_URL` is the same as above
+2. `NORMALIZER_FORMAT` - can either be `JsonArrayFormat` for our new format from the `schema` folder, or the legacy `CatalogInfoYamlFormat`; if not set defaults to `CatalogInfoYamlFormat` until RHDHPAI-611 and RHDHPAI-612 are completed.
 
 When you are ready to launch the 3 processes, set your current namespace to the `NAMESPACE` value:
 

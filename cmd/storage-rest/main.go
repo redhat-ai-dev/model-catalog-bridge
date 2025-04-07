@@ -32,7 +32,10 @@ func main() {
 	bkstgURL := os.Getenv("BKSTG_URL")
 	bkstgToken := os.Getenv("RHDH_TOKEN")
 
-	server := storage.NewStorageRESTServer(bs, bridgeURL, bridgeToken, bkstgURL, bkstgToken)
+	nfstr := os.Getenv(types.FormatEnvVar)
+	nf := types.NormalizerFormat(nfstr)
+
+	server := storage.NewStorageRESTServer(bs, bridgeURL, bridgeToken, bkstgURL, bkstgToken, nf)
 	stopCh := util.SetupSignalHandler()
 	server.Run(stopCh)
 

@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
 	"io"
 	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/klog/v2"
@@ -72,9 +73,13 @@ func ProcessOutput(str string, err error) {
 	}
 }
 
-func BuildImportKeyAndURI(seg1, seg2 string) (string, string) {
+func BuildImportKeyAndURI(seg1, seg2 string, format types.NormalizerFormat) (string, string) {
 	// no spaces in keys
 	seg1 = strings.ReplaceAll(seg1, " ", "")
 	seg2 = strings.ReplaceAll(seg2, " ", "")
-	return fmt.Sprintf("%s_%s", seg1, seg2), fmt.Sprintf("/%s/%s/catalog-info.yaml", seg1, seg2)
+	fn := "catalog-info.yaml"
+	if format == types.JsonArrayForamt {
+		fn = "model-catalog.json"
+	}
+	return fmt.Sprintf("%s_%s", seg1, seg2), fmt.Sprintf("/%s/%s/%s", seg1, seg2, fn)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/cmd/server/storage"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/config"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/rest"
+	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -21,9 +22,10 @@ type ImportLocationServer struct {
 	router  *gin.Engine
 	content map[string]*ImportLocation
 	storage *storage.BridgeStorageRESTClient
+	format  types.NormalizerFormat
 }
 
-func NewImportLocationServer(stURL string) *ImportLocationServer {
+func NewImportLocationServer(stURL string, nf types.NormalizerFormat) *ImportLocationServer {
 	//var content map[string]*ImportLocation
 	gin.SetMode(gin.ReleaseMode)
 	cfg, _ := util.GetK8sConfig(&config.Config{})
@@ -32,6 +34,7 @@ func NewImportLocationServer(stURL string) *ImportLocationServer {
 		router:  r,
 		content: map[string]*ImportLocation{},
 		storage: storage.SetupBridgeStorageRESTClient(stURL, util.GetCurrentToken(cfg)),
+		format:  nf,
 	}
 	r.SetTrustedProxies(nil)
 	r.TrustedPlatform = "X-Forwarded-For"
@@ -99,7 +102,7 @@ func (i *ImportLocationServer) loadFromStorage() (bool, error) {
 			klog.Errorf("bad response code from storage fetch model %s is %d, %s", key, rc, msg)
 			return false, nil
 		}
-		_, uri := util.BuildImportKeyAndURI(segs[0], segs[1])
+		_, uri := util.BuildImportKeyAndURI(segs[0], segs[1], i.format)
 		i.content[uri] = il
 		i.router.GET(uri, il.handleCatalogInfoGet)
 	}
@@ -185,7 +188,7 @@ func (u *ImportLocationServer) handleCatalogUpsertPost(c *gin.Context) {
 		return
 	}
 	//TODO normalizer id should be part of the model lookup URI
-	_, uri := util.BuildImportKeyAndURI(segs[0], segs[1])
+	_, uri := util.BuildImportKeyAndURI(segs[0], segs[1], u.format)
 	klog.Infof("Upserting URI %s with data of len %d", uri, len(postBody.Body))
 	il, exists := u.content[uri]
 	if !exists {
@@ -211,7 +214,7 @@ func (u *ImportLocationServer) handleCatalogDelete(c *gin.Context) {
 		return
 	}
 	//TODO normalizer id should be part of the model lookup URI
-	_, uri := util.BuildImportKeyAndURI(segs[0], segs[1])
+	_, uri := util.BuildImportKeyAndURI(segs[0], segs[1], u.format)
 	klog.Infof("Removing URI %s", uri)
 	// there is no way to unregister a URI, so we remove its content regardless of removing it from the map so that
 	// when backstage calls, we can return it a not found if the content is now nil

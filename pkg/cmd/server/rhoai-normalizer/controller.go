@@ -245,11 +245,10 @@ func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconc
 	buf := bytes.NewBuffer(b)
 	bwriter := bufio.NewWriter(buf)
 	importKey := ""
-	importURI := ""
 
 	//TODO fill in lifecycle from kfmr k/v pairs perhaps
 	if r.kfmrRoute != nil {
-		importKey, importURI, err = r.processKFMR(ctx, name, is, bwriter, log)
+		importKey, err = r.processKFMR(ctx, name, is, bwriter, log)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -271,7 +270,7 @@ func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconc
 		return reconcile.Result{}, nil
 	}
 
-	err = r.processBWriter(ctx, bwriter, buf, importKey, importURI)
+	err = r.processBWriter(bwriter, buf, importKey)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -279,7 +278,7 @@ func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconc
 	return reconcile.Result{}, nil
 }
 
-func (r *RHOAINormalizerReconcile) processBWriter(ctx context.Context, bwriter *bufio.Writer, buf *bytes.Buffer, importKey, importURI string) error {
+func (r *RHOAINormalizerReconcile) processBWriter(bwriter *bufio.Writer, buf *bytes.Buffer, importKey string) error {
 	err := bwriter.Flush()
 	if err != nil {
 		return err
@@ -297,11 +296,11 @@ func (r *RHOAINormalizerReconcile) processBWriter(ctx context.Context, bwriter *
 	return nil
 }
 
-func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.NamespacedName, is *serverapiv1beta1.InferenceService, bwriter io.Writer, log logr.Logger) (string, string, error) {
+func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.NamespacedName, is *serverapiv1beta1.InferenceService, bwriter io.Writer, log logr.Logger) (string, error) {
 	ready := r.setupKFMR(ctx)
 	if !ready {
 		log.V(4).Info(fmt.Sprintf("reconciling inferenceservice %s, kmr route %s has no ingress", name.String(), r.kfmrRoute.Name))
-		return "", "", nil
+		return "", nil
 	}
 
 	var kfmrRMs []openapi.RegisteredModel
@@ -309,7 +308,7 @@ func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.N
 	kfmrRMs, err = r.kfmr.ListRegisteredModels()
 	if err != nil {
 		log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error listing kfmr registered models", name.String()))
-		return "", "", err
+		return "", err
 	}
 
 	var kfmrISs []openapi.InferenceService
@@ -369,12 +368,12 @@ func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.N
 							r.format)
 
 						if err != nil {
-							return "", "", err
+							return "", err
 						}
 
 						//TODO iterate on the the REST URI's for our models if multi model?
-						importKey, importURI := util.BuildImportKeyAndURI(rm.Name, mv.Name)
-						return importKey, importURI, nil
+						importKey, _ := util.BuildImportKeyAndURI(rm.Name, mv.Name, r.format)
+						return importKey, nil
 
 					}
 
@@ -385,7 +384,7 @@ func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.N
 	}
 
 	// no match to kfmr, but do not return error, as caller can still process this as kserve only
-	return "", "", nil
+	return "", nil
 }
 
 // Start - supplement with background polling as controller relist does not duplicate delete events, and we can be more
@@ -430,9 +429,9 @@ func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context, buf *bytes.Bu
 		}
 		for _, mv := range mva {
 
-			importKey, importURI := util.BuildImportKeyAndURI(rm.Name, mv.Name)
+			importKey, _ := util.BuildImportKeyAndURI(rm.Name, mv.Name, r.format)
 			keys = append(keys, importKey)
-			err = r.processBWriter(ctx, bwriter, buf, importKey, importURI)
+			err = r.processBWriter(bwriter, buf, importKey)
 			if err != nil {
 				controllerLog.Error(err, "error processing KFMR writer")
 				continue

@@ -24,9 +24,10 @@ type StorageRESTServer struct {
 	pushedLocations map[string]*types.StorageBody
 	locations       *bridgeclient.BridgeLocationRESTClient
 	bkstg           rest.BackstageImport
+	format          types.NormalizerFormat
 }
 
-func NewStorageRESTServer(st types.BridgeStorage, bridgeURL, bridgeToken, bkstgURL, bkstgToken string) *StorageRESTServer {
+func NewStorageRESTServer(st types.BridgeStorage, bridgeURL, bridgeToken, bkstgURL, bkstgToken string, nf types.NormalizerFormat) *StorageRESTServer {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	cfg := &config.Config{
@@ -41,6 +42,7 @@ func NewStorageRESTServer(st types.BridgeStorage, bridgeURL, bridgeToken, bkstgU
 		pushedLocations: map[string]*types.StorageBody{},
 		locations:       bridgeclient.SetupBridgeLocationRESTClient(bridgeURL, bridgeToken),
 		bkstg:           backstage.SetupBackstageRESTClient(cfg),
+		format:          nf,
 	}
 	klog.Infof("NewStorageRESTServer")
 	r.SetTrustedProxies(nil)
@@ -238,7 +240,7 @@ func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 		return
 	}
 	uri := ""
-	key, uri = util.BuildImportKeyAndURI(segs[0], segs[1])
+	key, uri = util.BuildImportKeyAndURI(segs[0], segs[1], s.format)
 	klog.Infof("Upserting URI %s with key %s with data of len %d", uri, key, len(postBody.Body))
 
 	sb := &types.StorageBody{}
