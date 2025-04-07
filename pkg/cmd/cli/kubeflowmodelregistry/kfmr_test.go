@@ -29,15 +29,15 @@ func TestLoopOverKRMR_JsonArray(t *testing.T) {
 	}{
 		{
 			args:   []string{"Owner", "Lifecycle"},
-			outStr: []string{jsonListOutput},
+			outStr: []string{jsonListOutputJSON},
 		},
 		{
 			args:   []string{"Owner", "Lifecycle", "1"},
-			outStr: []string{jsonListOutput},
+			outStr: []string{jsonListOutputJSON},
 		},
 		{
 			args:   []string{"Owner", "Lifecycle"},
-			outStr: []string{jsonListWithInferenceOutput},
+			outStr: []string{jsonListWithInferenceOutputJSON},
 			is: &serverapiv1beta1.InferenceService{
 				ObjectMeta: metav1.ObjectMeta{
 					// see test/stub/common/MnistInferenceServices and test/stub/common/MinstServingEnvironment
@@ -122,7 +122,8 @@ func TestLoopOverKFMR_CatalogInfoYaml(t *testing.T) {
 }
 
 const (
-	jsonListWithInferenceOutput = `modelServer:
+	jsonListWithInferenceOutputJSON = `{"models":[{"artifactLocationURL":"https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx","description":"","lifecycle":"Lifecycle","name":"v1","owner":"rhdh-rhoai-bridge","tags":["_lastModified"]}],"modelServer":{"API":{"spec":"","type":"openapi","url":"https://kserve.com"},"authentication":false,"description":"","lifecycle":"development","name":"mnist-v1/8c2c357f-bf82-4d2d-a254-43eca96fd31d","owner":"rhdh-rhoai-bridge","tags":["_lastModified"]}}`
+	jsonListWithInferenceOutputYAML = `modelServer:
   API:
     spec: ""
     type: openapi
@@ -142,7 +143,8 @@ models:
   owner: rhdh-rhoai-bridge
   tags:
   - _lastModified`
-	jsonListOutput = `models:
+	jsonListOutputJSON = `{"models":[{"artifactLocationURL":"https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx","description":"","lifecycle":"Lifecycle","name":"v1","owner":"rhdh-rhoai-bridge","tags":["_lastModified"]}]}`
+	jsonListOutputYAML = `models:
 - artifactLocationURL: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx
   description: ""
   lifecycle: Lifecycle

@@ -59,7 +59,7 @@ func PrintModelCatalogPopulator(svrPop ModelCatalogPopulator, writer io.Writer) 
 	if ms.API != nil && len(ms.API.URL) > 0 {
 		modelCatalog.ModelServer = ms
 	}
-	err := util.PrintYaml(modelCatalog, false, writer)
+	err := util.PrintJSON(modelCatalog, writer)
 	if err != nil {
 		klog.Errorf("ERROR: converting ModelCatalog to yaml and printing: %s, %#v", err.Error(), modelCatalog)
 		return err

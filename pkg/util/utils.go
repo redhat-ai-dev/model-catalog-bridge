@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"k8s.io/cli-runtime/pkg/printers"
@@ -23,6 +24,19 @@ func PrintYaml(obj interface{}, addDivider bool, w io.Writer) error {
 		fmt.Fprintln(w, "---")
 	}
 	return err
+}
+
+func PrintJSON(obj interface{}, w io.Writer) error {
+	writer := printers.GetNewTabWriter(w)
+	output, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	_, err = writer.Write(output)
+	if err != nil {
+		return err
+	}
+	return writer.Flush()
 }
 
 var (
