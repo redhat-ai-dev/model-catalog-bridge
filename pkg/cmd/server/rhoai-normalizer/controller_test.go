@@ -164,13 +164,17 @@ func TestReconcile(t *testing.T) {
 	} {
 		ctx := context.TODO()
 		objs := []client.Object{tc.is}
+		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 		if tc.kfmrSvr != nil {
 			cfg := &config.Config{}
 			kfmr.SetupKubeflowTestRESTClient(tc.kfmrSvr, cfg)
-			r.kfmr = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
+			r.kfmr[tc.name] = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
 		}
 		r.client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
-		r.kfmrRoute = tc.route
+		if tc.route != nil {
+			r.kfmrRoute[tc.name] = tc.route
+		}
 		result, err := r.Reconcile(ctx, reconcile.Request{types.NamespacedName{Namespace: tc.is.Namespace, Name: tc.is.Name}})
 		common.AssertError(t, err)
 		found := false
@@ -211,23 +215,26 @@ func TestStart(t *testing.T) {
 		k8sToken:      "",
 		myNS:          "",
 		routeClient:   nil,
-		kfmrRoute: &routev1.Route{
-			Spec: routev1.RouteSpec{
-				Host: "http://foo.com",
+		kfmrRoute: map[string]*routev1.Route{
+			"foo": &routev1.Route{
+				Spec: routev1.RouteSpec{
+					Host: "http://foo.com",
+				},
+				Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
 			},
-			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
 		},
 		storage: storage.SetupBridgeStorageRESTClient(bsts),
-		//TODO for now letting TestReconcile handle Json Array and this handle catalog-info.yaml, but eventually may just do json array everywhere
+		// letting TestReconcile handle Json Array and this handle catalog-info.yaml, as it is better suited for testing our output buffer with multiple registries;
+		// remember, Reconcile will only produced one ModelCatalog, while the background poll can produce multiple, we pass a writer/buffer to collect all the entries
 		format: types2.CatalogInfoYamlFormat,
 	}
 
 	for _, tc := range []struct {
 		name          string
 		is            *serverapiv1beta1.InferenceService
-		kfmrSvr       *httptest.Server
+		kfmrSvr       []*httptest.Server
 		expectedKey   string
-		expectedValue string
+		expectedValue []string
 	}{
 		{
 			name: "not deployed, only registered model, model version, model artifact",
@@ -240,9 +247,9 @@ func TestStart(t *testing.T) {
 				Spec:   serverapiv1beta1.InferenceServiceSpec{},
 				Status: serverapiv1beta1.InferenceServiceStatus{},
 			},
-			kfmrSvr:       kts2,
+			kfmrSvr:       []*httptest.Server{kts2},
 			expectedKey:   "model-1_v1",
-			expectedValue: "description: dummy model 1",
+			expectedValue: []string{"description: dummy model 1"},
 		},
 		{
 			name: "deployed, with inference_service and serving_environments added",
@@ -255,9 +262,24 @@ func TestStart(t *testing.T) {
 				Spec:   serverapiv1beta1.InferenceServiceSpec{},
 				Status: serverapiv1beta1.InferenceServiceStatus{},
 			},
-			kfmrSvr:       kts1,
+			kfmrSvr:       []*httptest.Server{kts1},
 			expectedKey:   "mnist_v1,mnist_v3",
-			expectedValue: "url: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx",
+			expectedValue: []string{"url: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx"},
+		},
+		{
+			name: "deployed with multiple registries, with inference_service and serving_environments added, but also not deployed, only registered model, model version, model artifact",
+			is: &serverapiv1beta1.InferenceService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mnist-v1",
+					Namespace: "ggmtest",
+					Labels:    map[string]string{bridgerest.INF_SVC_RM_ID_LABEL: "1"},
+				},
+				Spec:   serverapiv1beta1.InferenceServiceSpec{},
+				Status: serverapiv1beta1.InferenceServiceStatus{},
+			},
+			kfmrSvr:       []*httptest.Server{kts1, kts2},
+			expectedKey:   "mnist_v1,mnist_v3,model-1_v1",
+			expectedValue: []string{"url: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx", "description: dummy model 1"},
 		},
 		{
 			name: "deployed, kserve only, no labels",
@@ -266,7 +288,7 @@ func TestStart(t *testing.T) {
 				Spec:       serverapiv1beta1.InferenceServiceSpec{},
 				Status:     serverapiv1beta1.InferenceServiceStatus{},
 			},
-			kfmrSvr:     kts3,
+			kfmrSvr:     []*httptest.Server{kts3},
 			expectedKey: "ggmtest_mnist-v1",
 		},
 		{
@@ -280,16 +302,18 @@ func TestStart(t *testing.T) {
 				Spec:   serverapiv1beta1.InferenceServiceSpec{},
 				Status: serverapiv1beta1.InferenceServiceStatus{},
 			},
-			kfmrSvr:     kts3,
+			kfmrSvr:     []*httptest.Server{kts3},
 			expectedKey: "ggmtest_mnist-v1",
 		},
 	} {
 		ctx := context.TODO()
 		objs := []client.Object{tc.is}
-		if tc.kfmrSvr != nil {
+		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
+		for i, kfmrSvr := range tc.kfmrSvr {
 			cfg := &config.Config{}
-			kfmr.SetupKubeflowTestRESTClient(tc.kfmrSvr, cfg)
-			r.kfmr = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
+			kfmr.SetupKubeflowTestRESTClient(kfmrSvr, cfg)
+			r.kfmr[fmt.Sprintf("%s-%d", tc.name, i)] = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
 		}
 		r.client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 
@@ -298,23 +322,21 @@ func TestStart(t *testing.T) {
 		bwriter := bufio.NewWriter(buf)
 		r.innerStart(ctx, buf, bwriter)
 
-		if len(tc.expectedValue) > 0 {
+		for _, expectedValue := range tc.expectedValue {
 			found := false
 			callback.Range(func(key, value any) bool {
 				t.Logf(fmt.Sprintf("found key %s for test %s", key, tc.name))
 				if !found {
 					postStr, ok := value.(string)
 					common.AssertEqual(t, ok, true)
-					if strings.Contains(postStr, tc.expectedValue) {
+					if strings.Contains(postStr, expectedValue) {
 						found = true
-						// clear out key for next test
-						callback.Delete(key)
 					}
 				}
 
 				return true
 			})
-			common.AssertEqual(t, found, true)
+			common.AssertEqual(t, true, found)
 			common.AssertEqual(t, true, len(buf.Bytes()) > 0)
 		}
 		if len(tc.expectedKey) > 0 {
@@ -326,14 +348,17 @@ func TestStart(t *testing.T) {
 					common.AssertEqual(t, ok, true)
 					if strings.Contains(postStr, tc.expectedKey) {
 						found = true
-						// clear out key for next test
-						callback.Delete(key)
 					}
 				}
 				return true
 			})
-			common.AssertEqual(t, found, true)
+			common.AssertEqual(t, true, found)
 		}
+		// clear out callback for next test
+		callback.Range(func(key, value any) bool {
+			callback.Delete(key)
+			return true
+		})
 	}
 
 }
@@ -355,11 +380,13 @@ func TestStartArchived(t *testing.T) {
 		k8sToken:      "",
 		myNS:          "",
 		routeClient:   nil,
-		kfmrRoute: &routev1.Route{
-			Spec: routev1.RouteSpec{
-				Host: "http://foo.com",
+		kfmrRoute: map[string]*routev1.Route{
+			"foo": &routev1.Route{
+				Spec: routev1.RouteSpec{
+					Host: "http://foo.com",
+				},
+				Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
 			},
-			Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
 		},
 		storage: storage.SetupBridgeStorageRESTClient(bsts),
 		//TODO eventually switch the defaulting to json array
@@ -375,8 +402,10 @@ func TestStartArchived(t *testing.T) {
 	} {
 		ctx := context.TODO()
 		cfg := &config.Config{}
+		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 		kfmr.SetupKubeflowTestRESTClient(kts1, cfg)
-		r.kfmr = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
+		r.kfmr[tc.name] = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
 		r.client = fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		b := []byte{}

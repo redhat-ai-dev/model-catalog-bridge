@@ -109,32 +109,54 @@ func (p *pprof) Start(ctx context.Context) error {
 }
 
 func (r *RHOAINormalizerReconcile) setupKFMR(ctx context.Context) bool {
-	if r.kfmrRoute == nil || len(r.kfmrRoute.Status.Ingress) == 0 {
-		var err error
-		rr := strings.NewReplacer("\r", "", "\n", "")
-		mrRoute := os.Getenv(types2.ModelRegistryRouteEnvVar)
-		rr.Replace(mrRoute)
-
-		r.kfmrRoute, err = r.routeClient.Routes("istio-system").Get(ctx, mrRoute, metav1.GetOptions{})
+	var err error
+	rr := strings.NewReplacer("\r", "", "\n", "")
+	mrRoute := os.Getenv(types2.ModelRegistryRouteEnvVar)
+	rr.Replace(mrRoute)
+	routeTuples := strings.Split(mrRoute, ",")
+	for _, routeTuple := range routeTuples {
+		if len(routeTuple) == 0 {
+			continue
+		}
+		parts := strings.Split(routeTuple, ":")
+		kfmrRoute := &routev1.Route{}
+		ns := "istio-system"
+		name := parts[0]
+		if len(parts) > 1 {
+			ns = parts[0]
+			name = parts[1]
+		}
+		kfmrRoute, err = r.routeClient.Routes(ns).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			controllerLog.Error(err, "error fetching model registry route")
-			return false
+			continue
+		}
+		if len(kfmrRoute.Status.Ingress) > 0 {
+			r.kfmrRoute[routeTuple] = kfmrRoute
 		}
 	}
-	if r.kfmrRoute != nil && len(r.kfmrRoute.Status.Ingress) > 0 && r.kfmr == nil {
-		//TODO fallback until we have the gitops style of KFMR permissions nailed down
-		rr := strings.NewReplacer("\r", "", "\n", "")
-		kfmrToken := os.Getenv(types2.ModelRegistryTokenEnvVar)
-		kfmrToken = rr.Replace(kfmrToken)
-		if len(kfmrToken) == 0 {
-			kfmrToken = r.k8sToken
+
+	if len(r.kfmrRoute) == 0 {
+		return false
+	}
+
+	kfmrToken := os.Getenv(types2.ModelRegistryTokenEnvVar)
+	kfmrToken = rr.Replace(kfmrToken)
+	if len(kfmrToken) == 0 {
+		kfmrToken = r.k8sToken
+	}
+	for key, kfmrRoute := range r.kfmrRoute {
+		_, ok := r.kfmr[key]
+		if ok {
+			continue
 		}
-		r.kfmr = &kubeflowmodelregistry.KubeFlowRESTClientWrapper{
+		kfmr := &kubeflowmodelregistry.KubeFlowRESTClientWrapper{
 			Token:      kfmrToken,
-			RootURL:    "https://" + r.kfmrRoute.Status.Ingress[0].Host + bridgerest.KFMR_BASE_URI,
+			RootURL:    "https://" + kfmrRoute.Status.Ingress[0].Host + bridgerest.KFMR_BASE_URI,
 			RESTClient: resty.New(),
 		}
-		r.kfmr.RESTClient.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+		kfmr.RESTClient.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+		r.kfmr[key] = kfmr
 	}
 	return true
 }
@@ -192,14 +214,8 @@ func SetupController(ctx context.Context, mgr ctrl.Manager, cfg *rest.Config, pp
 
 	reconciler.myNS = util.GetCurrentProject()
 
-	mrRoute := os.Getenv(types2.ModelRegistryRouteEnvVar)
-	rr := strings.NewReplacer("\r", "", "\n", "")
-	mrRoute = rr.Replace(mrRoute)
-	reconciler.kfmrRoute, err = reconciler.routeClient.Routes("istio-system").Get(context.TODO(), mrRoute, metav1.GetOptions{})
-	if err == nil {
-		controllerLog.Error(err, "error getting model registry route, will try again later")
-	}
-
+	reconciler.kfmrRoute = map[string]*routev1.Route{}
+	reconciler.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 	reconciler.setupKFMR(ctx)
 
 	err = ctrl.NewControllerManagedBy(mgr).For(&serverapiv1beta1.InferenceService{}).
@@ -246,16 +262,14 @@ func (f RHOAINormalizerFilter) Update(e event.UpdateEvent) bool {
 }
 
 type RHOAINormalizerReconcile struct {
-	client        client.Client
-	scheme        *runtime.Scheme
-	eventRecorder record.EventRecorder
-	k8sToken      string
-	//TODO make array to handle multi-registry
-	kfmrRoute   *routev1.Route
-	myNS        string
-	routeClient *routeclient.RouteV1Client
-	//TODO make array to handle multi-registry
-	kfmr             *kubeflowmodelregistry.KubeFlowRESTClientWrapper
+	client           client.Client
+	scheme           *runtime.Scheme
+	eventRecorder    record.EventRecorder
+	k8sToken         string
+	kfmrRoute        map[string]*routev1.Route
+	myNS             string
+	routeClient      *routeclient.RouteV1Client
+	kfmr             map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper
 	storage          *storage.BridgeStorageRESTClient
 	format           types2.NormalizerFormat
 	defaultOwner     string
@@ -297,7 +311,7 @@ func (r *RHOAINormalizerReconcile) Reconcile(ctx context.Context, request reconc
 	importKey := ""
 
 	//TODO fill in lifecycle from kfmr k/v pairs perhaps
-	if r.kfmrRoute != nil {
+	if len(r.kfmrRoute) > 0 {
 		importKey, err = r.processKFMR(ctx, name, is, bwriter, log)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -369,136 +383,137 @@ func (r *RHOAINormalizerReconcile) processBWriter(bwriter *bufio.Writer, buf *by
 func (r *RHOAINormalizerReconcile) processKFMR(ctx context.Context, name types.NamespacedName, is *serverapiv1beta1.InferenceService, bwriter io.Writer, log logr.Logger) (string, error) {
 	ready := r.setupKFMR(ctx)
 	if !ready {
-		log.V(4).Info(fmt.Sprintf("reconciling inferenceservice %s, kmr route %s has no ingress", name.String(), r.kfmrRoute.Name))
+		log.V(4).Info(fmt.Sprintf("reconciling inferenceservice %s, no kmr routes with ingress", name.String()))
 		return "", nil
 	}
 
 	var kfmrRMs []openapi.RegisteredModel
-	var err error
-	kfmrRMs, err = r.kfmr.ListRegisteredModels()
-	if err != nil {
-		log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error listing kfmr registered models", name.String()))
-		return "", err
-	}
-
 	var kfmrISs []openapi.InferenceService
-	//TODO as part of multi-registry support, need to iterator over all the model registries we are aware of to see which one deployed the KServe InferenceService, adding to the kfmrISs array
-	kfmrISs, err = r.kfmr.ListInferenceServices()
-	if err != nil {
-		log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error listing kfmr registered models", name.String()))
-	}
-
-	// if for some reason kserve/kubeflow reconciliation is not working and there are no kubeflow inference services,
-	// let's match up based on registered model / model version name
-	if len(kfmrISs) == 0 {
-		for _, rm := range kfmrRMs {
-			mvs := []openapi.ModelVersion{}
-			mvs, err = r.kfmr.ListModelVersions(rm.GetId())
-			if err != nil {
-				log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error list kfmr model version %s", name.String(), rm.GetId()))
-			}
-			for _, mv := range mvs {
-				if util.KServeInferenceServiceMapping(rm.Name, mv.Name, is.Name) {
-					// let's go with this one
-					var mas []openapi.ModelArtifact
-					mas, err = r.kfmr.ListModelArtifacts(mv.GetId())
-					if err != nil {
-						log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model artifacts for %s", name.String(), mv.GetId()))
-						// don't just continue, try to build a catalog entry with the subset of info available
-					}
-					if mas == nil {
-						log.Info(fmt.Sprintf("either mv %#v or mas %#v is nil, bypassing CallBackstagePrinters", mv, mas))
-						continue
-					}
-
-					err = kubeflowmodelregistry.CallBackstagePrinters(ctx,
-						r.defaultOwner,
-						r.defaultLifecycle,
-						&rm,
-						//TODO deal with multiple versions
-						[]openapi.ModelVersion{mv},
-						map[string][]openapi.ModelArtifact{mv.GetId(): mas},
-						[]openapi.InferenceService{},
-						is,
-						r.kfmr,
-						r.client,
-						bwriter,
-						r.format)
-
-					if err != nil {
-						return "", err
-					}
-
-					//TODO iterate on the the REST URI's for our models if multi model?
-					importKey, _ := util.BuildImportKeyAndURI(util.SanitizeName(rm.Name), util.SanitizeName(mv.Name), r.format)
-					return importKey, nil
-				}
-			}
-		}
-	}
-
-	for _, rm := range kfmrRMs {
-		if rm.Id == nil {
-			log.Info(fmt.Sprintf("reconciling inferenceservice %s, registered model %s has no ID", name.String(), rm.Name))
+	for _, kfmr := range r.kfmr {
+		rms, err := kfmr.ListRegisteredModels()
+		if err != nil {
+			log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error listing kfmr registered models", name.String()))
+			// if we cannot fetch registered models, we won't bother with inference services
 			continue
 		}
-
-		for _, kfmrIS := range kfmrISs {
-			if kfmrIS.Id != nil && kfmrIS.RegisteredModelId == *rm.Id && strings.HasPrefix(kfmrIS.GetName(), is.Name) {
-				seId := kfmrIS.GetServingEnvironmentId()
-				var se *openapi.ServingEnvironment
-				se, err = r.kfmr.GetServingEnvironment(seId)
+		kfmrRMs = append(kfmrRMs, rms...)
+		iss, err := kfmr.ListInferenceServices()
+		if err != nil {
+			log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error listing kfmr registered models", name.String()))
+		}
+		kfmrISs = append(kfmrISs, iss...)
+		// if for some reason kserve/kubeflow reconciliation is not working and there are no kubeflow inference services,
+		// let's match up based on registered model / model version name
+		if len(kfmrISs) == 0 {
+			for _, rm := range kfmrRMs {
+				mvs := []openapi.ModelVersion{}
+				mvs, err = kfmr.ListModelVersions(rm.GetId())
 				if err != nil {
-					log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr serving environment %s", name.String(), seId))
-					continue
+					log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error list kfmr model version %s", name.String(), rm.GetId()))
 				}
+				for _, mv := range mvs {
+					if util.KServeInferenceServiceMapping(rm.Name, mv.Name, is.Name) {
+						// let's go with this one
+						var mas []openapi.ModelArtifact
+						mas, err = kfmr.ListModelArtifacts(mv.GetId())
+						if err != nil {
+							log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model artifacts for %s", name.String(), mv.GetId()))
+							// don't just continue, try to build a catalog entry with the subset of info available
+						}
+						if mas == nil {
+							log.Info(fmt.Sprintf("either mv %#v or mas %#v is nil, bypassing CallBackstagePrinters", mv, mas))
+							continue
+						}
 
-				if se.Name != nil && *se.Name == is.Namespace {
-					// FOUND the match !!
-					// reminder based on explanations about model artifact actually being the "root" of their model, and what has been observed in testing,
-					mvId := kfmrIS.GetModelVersionId()
-					var mas []openapi.ModelArtifact
-					var mv *openapi.ModelVersion
-					mv, err = r.kfmr.GetModelVersions(mvId)
-					if err != nil {
-						log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model version %s", name.String(), mvId))
-						// don't just continue, try to build a catalog entry with the subset of info available
-					}
-					mas, err = r.kfmr.ListModelArtifacts(mvId)
-					if err != nil {
-						log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model artifacts for %s", name.String(), mvId))
-						// don't just continue, try to build a catalog entry with the subset of info available
-					}
+						err = kubeflowmodelregistry.CallBackstagePrinters(ctx,
+							r.defaultOwner,
+							r.defaultLifecycle,
+							&rm,
+							//TODO deal with multiple versions
+							[]openapi.ModelVersion{mv},
+							map[string][]openapi.ModelArtifact{mv.GetId(): mas},
+							[]openapi.InferenceService{},
+							is,
+							kfmr,
+							r.client,
+							bwriter,
+							r.format)
 
-					if mv == nil || mas == nil {
-						log.Info(fmt.Sprintf("either mv %#v or mas %#v is nil, bypassing CallBackstagePrinters", mv, mas))
+						if err != nil {
+							return "", err
+						}
+
+						//TODO iterate on the the REST URI's for our models if multi model?
+						importKey, _ := util.BuildImportKeyAndURI(util.SanitizeName(rm.Name), util.SanitizeName(mv.Name), r.format)
+						return importKey, nil
+					}
+				}
+			}
+		}
+
+		for _, rm := range kfmrRMs {
+			if rm.Id == nil {
+				log.Info(fmt.Sprintf("reconciling inferenceservice %s, registered model %s has no ID", name.String(), rm.Name))
+				continue
+			}
+
+			for _, kfmrIS := range kfmrISs {
+				if kfmrIS.Id != nil && kfmrIS.RegisteredModelId == *rm.Id && strings.HasPrefix(kfmrIS.GetName(), is.Name) {
+					seId := kfmrIS.GetServingEnvironmentId()
+					var se *openapi.ServingEnvironment
+					se, err = kfmr.GetServingEnvironment(seId)
+					if err != nil {
+						log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr serving environment %s", name.String(), seId))
 						continue
 					}
 
-					err = kubeflowmodelregistry.CallBackstagePrinters(ctx,
-						r.defaultOwner,
-						r.defaultLifecycle,
-						&rm,
-						//TODO deal with multiple versions
-						[]openapi.ModelVersion{*mv},
-						map[string][]openapi.ModelArtifact{mvId: mas},
-						[]openapi.InferenceService{kfmrIS},
-						is,
-						r.kfmr,
-						r.client,
-						bwriter,
-						r.format)
+					if se.Name != nil && *se.Name == is.Namespace {
+						// FOUND the match !!
+						// reminder based on explanations about model artifact actually being the "root" of their model, and what has been observed in testing,
+						mvId := kfmrIS.GetModelVersionId()
+						var mas []openapi.ModelArtifact
+						var mv *openapi.ModelVersion
+						mv, err = kfmr.GetModelVersions(mvId)
+						if err != nil {
+							log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model version %s", name.String(), mvId))
+							// don't just continue, try to build a catalog entry with the subset of info available
+						}
+						mas, err = kfmr.ListModelArtifacts(mvId)
+						if err != nil {
+							log.Error(err, fmt.Sprintf("reconciling inferenceservice %s, error getting kfmr model artifacts for %s", name.String(), mvId))
+							// don't just continue, try to build a catalog entry with the subset of info available
+						}
 
-					if err != nil {
-						return "", err
+						if mv == nil || mas == nil {
+							log.Info(fmt.Sprintf("either mv %#v or mas %#v is nil, bypassing CallBackstagePrinters", mv, mas))
+							continue
+						}
+
+						err = kubeflowmodelregistry.CallBackstagePrinters(ctx,
+							r.defaultOwner,
+							r.defaultLifecycle,
+							&rm,
+							//TODO deal with multiple versions
+							[]openapi.ModelVersion{*mv},
+							map[string][]openapi.ModelArtifact{mvId: mas},
+							[]openapi.InferenceService{kfmrIS},
+							is,
+							kfmr,
+							r.client,
+							bwriter,
+							r.format)
+
+						if err != nil {
+							return "", err
+						}
+
+						//TODO iterate on the the REST URI's for our models if multi model?
+						importKey, _ := util.BuildImportKeyAndURI(util.SanitizeName(rm.Name), util.SanitizeName(mv.Name), r.format)
+						return importKey, nil
+
 					}
 
-					//TODO iterate on the the REST URI's for our models if multi model?
-					importKey, _ := util.BuildImportKeyAndURI(util.SanitizeName(rm.Name), util.SanitizeName(mv.Name), r.format)
-					return importKey, nil
-
 				}
-
 			}
 		}
 	}
@@ -523,65 +538,64 @@ func (r *RHOAINormalizerReconcile) Start(ctx context.Context) error {
 }
 
 func (r *RHOAINormalizerReconcile) innerStart(ctx context.Context, buf *bytes.Buffer, bwriter *bufio.Writer) {
-	ready := r.setupKFMR(ctx)
-	if !ready {
-		return
-	}
+	r.setupKFMR(ctx)
+	// we do not punt if there is no kfmr so as to handle the kserve only scenario
 
-	var err error
-	var rms []openapi.RegisteredModel
-	var mvs map[string][]openapi.ModelVersion
-	var mas map[string]map[string][]openapi.ModelArtifact
-	var isl []openapi.InferenceService
-
-	//TODO when we officially do multi model registry, the `r.kfmr` field will be an array, and we'll aggregate each model registry's output into what we process below.
-	rms, mvs, mas, err = kubeflowmodelregistry.LoopOverKFMR([]string{}, r.kfmr)
-	if err != nil {
-		controllerLog.Error(err, "err looping over KFMR")
-		return
-	}
 	keys := []string{}
-	for _, rm := range rms {
-		mva, ok := mvs[util.SanitizeName(rm.Name)]
-		if !ok {
-			continue
-		}
-		maa, ok2 := mas[util.SanitizeName(rm.Name)]
-		if !ok2 {
-			continue
-		}
-		for _, mv := range mva {
+	for _, kfmr := range r.kfmr {
+		var err error
+		var rms []openapi.RegisteredModel
+		var mvs map[string][]openapi.ModelVersion
+		var mas map[string]map[string][]openapi.ModelArtifact
+		var isl []openapi.InferenceService
 
-			importKey, _ := util.BuildImportKeyAndURI(util.SanitizeName(rm.Name), util.SanitizeName(mv.Name), r.format)
-			keys = append(keys, importKey)
-			eb := []byte{}
-			ebuf := bytes.NewBuffer(eb)
-			ewriter := bufio.NewWriter(ebuf)
-			if buf != nil && bwriter != nil {
-				ebuf = buf
-				ewriter = bwriter
-			}
-			isl, err = r.kfmr.ListInferenceServices()
-			if err != nil {
-				controllerLog.Error(err, "error listing kubeflow inference services")
+		rms, mvs, mas, err = kubeflowmodelregistry.LoopOverKFMR([]string{}, kfmr)
+		if err != nil {
+			controllerLog.Error(err, "err looping over KFMR")
+			return
+		}
+		for _, rm := range rms {
+			mva, ok := mvs[util.SanitizeName(rm.Name)]
+			if !ok {
 				continue
 			}
-			err = kubeflowmodelregistry.CallBackstagePrinters(ctx, r.defaultOwner, r.defaultLifecycle, &rm, mva, maa, isl, nil, r.kfmr, r.client, ewriter, r.format)
-			if err != nil {
-				controllerLog.Error(err, "error processing calling backstage printer")
+			maa, ok2 := mas[util.SanitizeName(rm.Name)]
+			if !ok2 {
 				continue
 			}
-			err = r.processBWriter(ewriter, ebuf, importKey)
-			if err != nil {
-				controllerLog.Error(err, "error processing KFMR writer")
-				continue
+			for _, mv := range mva {
+
+				importKey, _ := util.BuildImportKeyAndURI(util.SanitizeName(rm.Name), util.SanitizeName(mv.Name), r.format)
+				keys = append(keys, importKey)
+				eb := []byte{}
+				ebuf := bytes.NewBuffer(eb)
+				ewriter := bufio.NewWriter(ebuf)
+				if buf != nil && bwriter != nil {
+					ebuf = buf
+					ewriter = bwriter
+				}
+				isl, err = kfmr.ListInferenceServices()
+				if err != nil {
+					controllerLog.Error(err, "error listing kubeflow inference services")
+					continue
+				}
+				err = kubeflowmodelregistry.CallBackstagePrinters(ctx, r.defaultOwner, r.defaultLifecycle, &rm, mva, maa, isl, nil, kfmr, r.client, ewriter, r.format)
+				if err != nil {
+					controllerLog.Error(err, "error processing calling backstage printer")
+					continue
+				}
+				err = r.processBWriter(ewriter, ebuf, importKey)
+				if err != nil {
+					controllerLog.Error(err, "error processing KFMR writer")
+					continue
+				}
 			}
 		}
 	}
 
 	isList := &serverapiv1beta1.InferenceServiceList{}
 	listOptions := &client.ListOptions{Namespace: metav1.NamespaceAll}
-	err = r.client.List(ctx, isList, listOptions)
+	err := r.client.List(ctx, isList, listOptions)
 	if err != nil {
 		controllerLog.Error(err, "error listing kserve inferenceservices")
 	}
