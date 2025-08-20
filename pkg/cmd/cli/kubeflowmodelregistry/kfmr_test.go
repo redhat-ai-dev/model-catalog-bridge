@@ -76,7 +76,7 @@ func TestLoopOverKRMR_JsonArray(t *testing.T) {
 				Models: []golang.Model{
 					{
 						Annotations: map[string]string{
-							"TechDocs": "https://github.com/redhat-ai-dev/granite-3.1-8b-lab-docs",
+							"TechDocs": "http://localhost:9090/modelcard?key=RedHatrhelai1granite-7b-starter",
 						},
 						Description: "simple model that does not require a GPU",
 						Ethics:      &ethics,

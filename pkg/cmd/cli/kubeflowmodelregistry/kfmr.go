@@ -130,7 +130,7 @@ func getTagsFromCustomProps(lastMod bool, props map[string]openapi.MetadataValue
 		case cpk == brdgtypes.LicenseKey:
 			fallthrough
 		case cpk == brdgtypes.TechDocsKey:
-			klog.Info("Skip adding TechDocs or License key to tags")
+			klog.V(4).Infof("Skip adding TechDocs or License key to tags")
 		case cpk == brdgtypes.RHOAIModelCatalogSourceModelVersion:
 			fallthrough
 		case cpk == brdgtypes.RHOAIModelCatalogSourceModelKey:
@@ -450,10 +450,9 @@ func (m *ModelPopulator) GetLicense() *string {
 
 func (m *ModelPopulator) GetTechDocs() *string {
 	techdocsUrl := m.getStringPropVal(brdgtypes.TechDocsKey)
-	if techdocsUrl == nil && strings.Contains(m.GetName(), brdgtypes.Granite318bLabName) {
-		granite31TechDocs := brdgtypes.Granite318bLabTechDocs
-		return &granite31TechDocs
-	} else if techdocsUrl != nil {
+	replacer := strings.NewReplacer(" ", "")
+
+	if techdocsUrl != nil {
 		u, err := url.Parse(*techdocsUrl)
 		switch {
 		case err != nil:
@@ -465,6 +464,14 @@ func (m *ModelPopulator) GetTechDocs() *string {
 			return nil
 		}
 	}
+	for _, mas := range m.ModelArtifacts {
+		for _, ma := range mas {
+			s := fmt.Sprintf("http://localhost:9090%s?key=%s", util.ModelCardURI, replacer.Replace(ma.GetModelSourceClass())+replacer.Replace(ma.GetModelSourceGroup())+replacer.Replace(ma.GetModelSourceName()))
+			techdocsUrl = &s
+			break
+		}
+	}
+
 	return techdocsUrl
 }
 

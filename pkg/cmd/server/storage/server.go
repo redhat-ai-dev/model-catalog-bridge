@@ -156,8 +156,8 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		msg := fmt.Sprintf("error listing location keys: %s", err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(err)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 			// initiate removal
 			err = s.st.Remove(k)
 			if err != nil {
-				klog.Errorf(fmt.Sprintf("error removing from storage key %s: %s", k, err.Error()))
+				klog.Errorf("error removing from storage key %s: %s", k, err.Error())
 				errors = append(errors, err)
 				continue
 			}
@@ -208,7 +208,7 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 			}
 			if rc != http.StatusOK && rc != http.StatusCreated {
 				err = fmt.Errorf("bad rc removing from storage key %d: %s", rc, msg)
-				klog.Errorf(err.Error())
+				klog.Error(err.Error())
 				errors = append(errors, err)
 				continue
 			}
@@ -221,7 +221,7 @@ func (s *StorageRESTServer) handleCatalogCurrentKeySetPost(c *gin.Context) {
 		for _, e := range errors {
 			msg = fmt.Sprintf("%s;%s", msg, e.Error())
 		}
-		c.Error(fmt.Errorf(msg))
+		c.Error(fmt.Errorf("%d errors: %s", len(errors), msg))
 		return
 	}
 	c.Status(http.StatusOK)
@@ -247,8 +247,8 @@ func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 	if err != nil {
 		c.Status(http.StatusBadRequest)
 		msg := fmt.Sprintf("error reading POST body: %s", err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(fmt.Errorf("error reading POST body: %s", err.Error()))
 		return
 	}
 	//TOOD soon will have the type of normalizer preface the model name and version
@@ -278,27 +278,27 @@ func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		msg := fmt.Sprintf("error upserting to storage key %s POST body: %s", key, err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(fmt.Errorf("error upserting to storage key %s POST body: %s", key, err.Error()))
 		return
 	}
 
 	// push update to bridge locations REST endpoint
 	var rc int
 	var msg string
-	rc, msg, _, err = s.locations.UpsertModel(key, postBody.Body)
+	rc, msg, err = s.locations.UpsertModel(key, &postBody)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		msg = fmt.Sprintf("error upserting to bridge uri %s POST body: msg %s error %s", uri, msg, err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(fmt.Errorf("error upserting to bridge uri %s POST body: msg %s error %s", uri, msg, err.Error()))
 		return
 	}
 	if rc != http.StatusCreated && rc != http.StatusOK {
 		c.Status(rc)
 		msg = fmt.Sprintf("error upserting to bridge uri %s POST body: msg %s", uri, msg)
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(fmt.Errorf("error upserting to bridge uri %s POST body: msg %s", uri, msg))
 	}
 
 	if alreadyPushed {
@@ -340,7 +340,7 @@ func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 		if err != nil {
 			c.Status(http.StatusInternalServerError)
 			msg = fmt.Sprintf("error importing location %s to backstage: %s", s.locations.HostURL+uri, err.Error())
-			klog.Errorf(msg)
+			klog.Error(msg)
 			// let's not error out if backstage is not available for a push / import location ... backstage will pull
 			// when it comes up
 			c.Status(http.StatusCreated)
@@ -351,8 +351,8 @@ func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 			//TODO perhaps delete location on the backstage side as well as our cache
 			c.Status(http.StatusBadRequest)
 			msg = fmt.Sprintf("parsing of import location return had an issue: %#v", impResp)
-			klog.Errorf(msg)
-			c.Error(fmt.Errorf(msg))
+			klog.Error(msg)
+			c.Error(fmt.Errorf("parsing of import location return had an issue: %#v", impResp))
 			return
 		}
 
@@ -367,8 +367,8 @@ func (s *StorageRESTServer) handleCatalogUpsertPost(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		//TODO perhaps delete location on the backstage side as well as our cache
 		msg = fmt.Sprintf("error upserting to storage key %s POST body plus backstage ID: %s", key, err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(fmt.Errorf("error upserting to storage key %s POST body plus backstage ID: %s", key, err.Error()))
 		return
 	}
 
@@ -386,8 +386,8 @@ func (s *StorageRESTServer) handleCatalogList(c *gin.Context) {
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		msg := fmt.Sprintf("error listing location keys: %s", err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(fmt.Errorf("error listing location keys: %s", err.Error()))
 		return
 	}
 	var content []byte

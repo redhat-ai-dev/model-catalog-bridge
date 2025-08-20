@@ -3,6 +3,10 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/cmd/server/storage"
@@ -11,18 +15,16 @@ import (
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/types"
 	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/util"
 	"k8s.io/klog/v2"
-	"net/http"
-	"strings"
-	"sync"
 )
 
 type ImportLocationServer struct {
-	router  *gin.Engine
-	content map[string]*ImportLocation
-	storage *storage.BridgeStorageRESTClient
-	format  types.NormalizerFormat
-	port    string
-	lock    sync.Mutex
+	router     *gin.Engine
+	content    map[string]*ImportLocation
+	modelcards map[string]string
+	storage    *storage.BridgeStorageRESTClient
+	format     types.NormalizerFormat
+	port       string
+	lock       sync.Mutex
 }
 
 func NewImportLocationServer(stURL, port string, nf types.NormalizerFormat) *ImportLocationServer {
@@ -33,6 +35,7 @@ func NewImportLocationServer(stURL, port string, nf types.NormalizerFormat) *Imp
 	i := &ImportLocationServer{
 		router:  r,
 		content: map[string]*ImportLocation{},
+        modelcards: map[string]string{},
 		storage: storage.SetupBridgeStorageRESTClient(stURL, util.GetCurrentToken(cfg)),
 		format:  nf,
 		port:    port,
@@ -72,6 +75,7 @@ func NewImportLocationServer(stURL, port string, nf types.NormalizerFormat) *Imp
 		klog.Infof("returning content: uriString %s with data of len %d", uriString, len(il.content))
 		il.handleCatalogInfoGet(c)
 	})
+	r.GET(util.ModelCardURI, i.handleModelCardGet)
 	return i
 }
 
@@ -197,8 +201,8 @@ func (u *ImportLocationServer) handleCatalogUpsertPost(c *gin.Context) {
 	if err != nil {
 		c.Status(http.StatusBadRequest)
 		msg := fmt.Sprintf("error reading POST body: %s", err.Error())
-		klog.Errorf(msg)
-		c.Error(fmt.Errorf(msg))
+		klog.Error(msg)
+		c.Error(err)
 		return
 	}
 	segs := strings.Split(key, "_")
@@ -214,7 +218,8 @@ func (u *ImportLocationServer) handleCatalogUpsertPost(c *gin.Context) {
 	u.lock.Lock()
 	defer u.lock.Unlock()
 	u.content[uriString] = il
-	klog.Infof("Upserting URI %s with data of len %d", uriString, len(postBody.Body))
+	u.modelcards[postBody.ModelCardKey] = postBody.ModelCard
+	klog.Infof("Upserting URI %s with data of len %d with modelcard key %s and modelcard len %d", uriString, len(postBody.Body), postBody.ModelCardKey, len(postBody.ModelCard))
 	c.Status(http.StatusCreated)
 }
 
@@ -243,4 +248,17 @@ func (u *ImportLocationServer) handleCatalogDelete(c *gin.Context) {
 		il.content = nil
 	}
 	c.Status(http.StatusOK)
+}
+
+func (i *ImportLocationServer) handleModelCardGet(c *gin.Context) {
+     i.lock.Lock()
+     defer i.lock.Unlock()
+     key := c.Query(util.KeyQueryParam)
+     content, ok := i.modelcards[key]
+     if !ok {
+          c.Status(http.StatusNotFound)
+          return
+     }
+     c.Data(http.StatusOK, "Content-Type: text/markdown", []byte(content))
+
 }

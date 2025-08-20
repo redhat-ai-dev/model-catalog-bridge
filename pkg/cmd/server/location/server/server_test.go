@@ -2,18 +2,19 @@ package server
 
 import (
 	"bytes"
-	"github.com/gin-gonic/gin"
-	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/rest"
-	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/common"
-	testgin "github.com/redhat-ai-dev/model-catalog-bridge/test/stub/gin-gonic"
-	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/storage"
 	"io"
-	"k8s.io/apimachinery/pkg/util/json"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redhat-ai-dev/model-catalog-bridge/pkg/rest"
+	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/common"
+	testgin "github.com/redhat-ai-dev/model-catalog-bridge/test/stub/gin-gonic"
+	"github.com/redhat-ai-dev/model-catalog-bridge/test/stub/storage"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 func TestLoadFromStorage(t *testing.T) {
@@ -86,7 +87,7 @@ func TestHandleCatalogDiscoveryGet(t *testing.T) {
 	} {
 		testWriter := testgin.NewTestResponseWriter()
 		ctx, _ := gin.CreateTestContext(testWriter)
-		ils := &ImportLocationServer{content: tc.content}
+		ils := &ImportLocationServer{content: tc.content, modelcards: map[string]string{}}
 
 		ils.handleCatalogDiscoveryGet(ctx)
 
@@ -100,9 +101,60 @@ func TestHandleCatalogDiscoveryGet(t *testing.T) {
 	}
 }
 
+func TestHandleCatalogDiscoveryGetModel(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		content           map[string]string
+		param             string
+		expectedSC        int
+		expectedBody      string
+		expectedBodyParts []string
+	}{
+		{
+			name:       "no content",
+			param:      "foo",
+			expectedSC: http.StatusNotFound,
+		},
+		{
+			name:       "invalid key",
+			expectedSC: http.StatusNotFound,
+			param:      "foo",
+			content: map[string]string{
+				"bar": "bar",
+			},
+		},
+		{
+			name:       "valid key",
+			expectedSC: http.StatusOK,
+			content: map[string]string{
+				"foo": "bar",
+			},
+			param:        "foo",
+			expectedBody: `bar`,
+		},
+	} {
+		testWriter := testgin.NewTestResponseWriter()
+		ctx, _ := gin.CreateTestContext(testWriter)
+		ils := &ImportLocationServer{content: map[string]*ImportLocation{}, modelcards: tc.content}
+
+		req, _ := http.NewRequest(http.MethodGet, "/modelcard?key="+tc.param, nil)
+        ctx.Request = req
+
+		ils.handleModelCardGet(ctx)
+
+		common.AssertEqual(t, ctx.Writer.Status(), tc.expectedSC)
+		bodyBuf := testWriter.ResponseWriter.Body
+		common.AssertNotNil(t, bodyBuf)
+		if len(tc.expectedBody) > 0 {
+			common.AssertEqual(t, tc.expectedBody, bodyBuf.String())
+		}
+		common.AssertContains(t, bodyBuf.String(), tc.expectedBodyParts)
+	}
+}
+
 func TestHandleCatalogUpsertPost(t *testing.T) {
 	// define outside of the test loop so we can vet updates vs. creates
-	ils := &ImportLocationServer{content: map[string]*ImportLocation{}}
+	ils := &ImportLocationServer{content: map[string]*ImportLocation{}, modelcards: map[string]string{}}
 	for _, tc := range []struct {
 		name            string
 		reqURL          url.URL
@@ -221,7 +273,7 @@ func TestHandleCatalogDelete(t *testing.T) {
 
 		ctx, eng := gin.CreateTestContext(testWriter)
 		ctx.Request = &http.Request{URL: &tc.reqURL}
-		ils := &ImportLocationServer{content: tc.existingContent}
+		ils := &ImportLocationServer{content: tc.existingContent, modelcards: map[string]string{}}
 		ils.router = eng
 
 		ils.handleCatalogDelete(ctx)

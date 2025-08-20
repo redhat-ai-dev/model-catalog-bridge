@@ -88,6 +88,9 @@ func CreateBridgeStorageREST(t *testing.T, called *sync.Map) *httptest.Server {
 					w.WriteHeader(500)
 					return
 				}
+                if len(data.ModelCard) > 0 {
+                     called.Store("hasModelCard", data.ModelCard)
+                }
                 bodyStr := string(data.Body)
 				t.Logf("got buf of len %d and storing buf under keys %s and %s with path in body %v rawquery in body %v", len(data.Body), r.URL.Path, r.URL.RawQuery, strings.Contains(bodyStr, r.URL.Path), strings.Contains(bodyStr, r.URL.RawQuery))
 				called.Store(r.URL.Path, bodyStr)

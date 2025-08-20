@@ -61,6 +61,7 @@ func TestReconcile(t *testing.T) {
 		kfmrSvr       *httptest.Server
 		expectedFound bool
 		expectedValue string
+		hasModelCard  bool
 	}{
 		{
 			name: "kserve inference service that is not yet ready",
@@ -167,11 +168,13 @@ func TestReconcile(t *testing.T) {
 			kfmrSvr:       kts1,
 			expectedFound: true,
 			expectedValue: "https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx",
+			hasModelCard:  true,
 		},
 	} {
 		ctx := context.TODO()
 		objs := []client.Object{tc.is}
-		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmrRegistryRoute = map[string]*routev1.Route{}
+		r.kfmrCatalogRoute = map[string]*routev1.Route{}
 		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 		if tc.kfmrSvr != nil {
 			cfg := &config.Config{}
@@ -180,7 +183,8 @@ func TestReconcile(t *testing.T) {
 		}
 		r.client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 		if tc.route != nil {
-			r.kfmrRoute[tc.name] = tc.route
+			r.kfmrRegistryRoute[tc.name] = tc.route
+			r.kfmrCatalogRoute[tc.name] = tc.route
 		}
 		result, err := r.Reconcile(ctx, reconcile.Request{types.NamespacedName{Namespace: tc.is.Namespace, Name: tc.is.Name}})
 		common.AssertError(t, err)
@@ -189,7 +193,7 @@ func TestReconcile(t *testing.T) {
 			if len(tc.expectedValue) == 0 {
 				found = true
 			}
-			t.Logf(fmt.Sprintf("found key %s for test %s", key, tc.name))
+			t.Logf("found key %s for test %s", key, tc.name)
 			postStr, ok := value.(string)
 			common.AssertEqual(t, ok, true)
 			// note our expected value could be in any of the k/v pairs; we just need to find in one of them
@@ -203,6 +207,10 @@ func TestReconcile(t *testing.T) {
 		common.AssertEqual(t, tc.expectedFound, found)
 		if !tc.expectedFound {
 			common.AssertEqual(t, result.Requeue, true)
+		}
+		if tc.hasModelCard {
+			_, ok := callback.Load("hasModelCard")
+			common.AssertEqual(t, true, ok)
 		}
 	}
 }
@@ -228,7 +236,15 @@ func TestStart(t *testing.T) {
 		k8sToken:      "",
 		myNS:          "",
 		routeClient:   nil,
-		kfmrRoute: map[string]*routev1.Route{
+		kfmrCatalogRoute: map[string]*routev1.Route{
+			"foo": &routev1.Route{
+				Spec: routev1.RouteSpec{
+					Host: "http://foo.com",
+				},
+				Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
+			},
+		},
+		kfmrRegistryRoute: map[string]*routev1.Route{
 			"foo": &routev1.Route{
 				Spec: routev1.RouteSpec{
 					Host: "http://foo.com",
@@ -248,6 +264,7 @@ func TestStart(t *testing.T) {
 		kfmrSvr       []*httptest.Server
 		expectedKey   []string
 		expectedValue []string
+		hasModelCard  bool
 	}{
 		{
 			name: "not deployed, only registered model, model version, model artifact",
@@ -278,6 +295,7 @@ func TestStart(t *testing.T) {
 			kfmrSvr:       []*httptest.Server{kts1},
 			expectedKey:   []string{"mnist_v1", "mnist_v3"},
 			expectedValue: []string{"url: https://huggingface.co/tarilabs/mnist/resolve/v20231206163028/mnist.onnx"},
+			hasModelCard:  true,
 		},
 		{
 			name: "deployed with multiple registries, with inference_service and serving_environments added, but also not deployed, only registered model, model version, model artifact",
@@ -321,7 +339,8 @@ func TestStart(t *testing.T) {
 	} {
 		ctx := context.TODO()
 		objs := []client.Object{tc.is}
-		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmrCatalogRoute = map[string]*routev1.Route{}
+		r.kfmrRegistryRoute = map[string]*routev1.Route{}
 		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 		for i, kfmrSvr := range tc.kfmrSvr {
 			cfg := &config.Config{}
@@ -338,7 +357,7 @@ func TestStart(t *testing.T) {
 		for _, expectedValue := range tc.expectedValue {
 			found := false
 			callback.Range(func(key, value any) bool {
-				t.Logf(fmt.Sprintf("found key %s for test %s", key, tc.name))
+				t.Logf("found key %s for test %s", key, tc.name)
 				if !found {
 					postStr, ok := value.(string)
 					common.AssertEqual(t, ok, true)
@@ -355,7 +374,7 @@ func TestStart(t *testing.T) {
 		for _, expectedKey := range tc.expectedKey {
 			found := false
 			callback.Range(func(key, value any) bool {
-				t.Logf(fmt.Sprintf("found key %s for test %s", key, tc.name))
+				t.Logf("found key %s for test %s", key, tc.name)
 				if !found {
 					postStr, ok := value.(string)
 					common.AssertEqual(t, ok, true)
@@ -367,6 +386,10 @@ func TestStart(t *testing.T) {
 				return true
 			})
 			common.AssertEqual(t, true, found)
+		}
+		if tc.hasModelCard {
+			_, ok := callback.Load("hasModelCard")
+			common.AssertEqual(t, true, ok)
 		}
 		// clear out callback for next test
 		callback.Range(func(key, value any) bool {
@@ -394,7 +417,15 @@ func TestStart_JsonArray_MultiVersion(t *testing.T) {
 		k8sToken:      "",
 		myNS:          "",
 		routeClient:   nil,
-		kfmrRoute: map[string]*routev1.Route{
+		kfmrCatalogRoute: map[string]*routev1.Route{
+			"foo": &routev1.Route{
+				Spec: routev1.RouteSpec{
+					Host: "http://foo.com",
+				},
+				Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
+			},
+		},
+		kfmrRegistryRoute: map[string]*routev1.Route{
 			"foo": &routev1.Route{
 				Spec: routev1.RouteSpec{
 					Host: "http://foo.com",
@@ -437,7 +468,8 @@ func TestStart_JsonArray_MultiVersion(t *testing.T) {
 	} {
 		ctx := context.TODO()
 		objs := []client.Object{tc.is}
-		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmrCatalogRoute = map[string]*routev1.Route{}
+		r.kfmrRegistryRoute = map[string]*routev1.Route{}
 		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 		for i, kfmrSvr := range tc.kfmrSvr {
 			cfg := &config.Config{}
@@ -461,6 +493,8 @@ func TestStart_JsonArray_MultiVersion(t *testing.T) {
 		common.AssertEqual(t, false, strings.Contains(fmt.Sprintf("%v", data2), "mnist-v1"))
 		common.AssertEqual(t, false, strings.Contains(fmt.Sprintf("%v", data2), "modelServer"))
 		common.AssertEqual(t, true, strings.Contains(fmt.Sprintf("%v", data2), "mnist-v3"))
+		_, ok := callback.Load("hasModelCard")
+		common.AssertEqual(t, true, ok)
 
 		// clear out callback for next test
 		callback.Range(func(key, value any) bool {
@@ -488,7 +522,15 @@ func TestStartArchived(t *testing.T) {
 		k8sToken:      "",
 		myNS:          "",
 		routeClient:   nil,
-		kfmrRoute: map[string]*routev1.Route{
+		kfmrCatalogRoute: map[string]*routev1.Route{
+			"foo": &routev1.Route{
+				Spec: routev1.RouteSpec{
+					Host: "http://foo.com",
+				},
+				Status: routev1.RouteStatus{Ingress: []routev1.RouteIngress{{}}},
+			},
+		},
+		kfmrRegistryRoute: map[string]*routev1.Route{
 			"foo": &routev1.Route{
 				Spec: routev1.RouteSpec{
 					Host: "http://foo.com",
@@ -510,7 +552,8 @@ func TestStartArchived(t *testing.T) {
 	} {
 		ctx := context.TODO()
 		cfg := &config.Config{}
-		r.kfmrRoute = map[string]*routev1.Route{}
+		r.kfmrRegistryRoute = map[string]*routev1.Route{}
+		r.kfmrCatalogRoute = map[string]*routev1.Route{}
 		r.kfmr = map[string]*kubeflowmodelregistry.KubeFlowRESTClientWrapper{}
 		kfmr.SetupKubeflowTestRESTClient(kts1, cfg)
 		r.kfmr[tc.name] = kubeflowmodelregistry.SetupKubeflowRESTClient(cfg)
@@ -528,7 +571,7 @@ func TestStartArchived(t *testing.T) {
 			if len(postStr) == 0 {
 				ok = true
 			}
-			t.Logf(fmt.Sprintf("found key %s value %s for test %s", key, value, tc.name))
+			t.Logf("found key %s value %s for test %s", key, value, tc.name)
 
 			return true
 		})

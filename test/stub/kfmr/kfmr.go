@@ -69,6 +69,8 @@ func CreateGetServerWithInference(t *testing.T) *httptest.Server {
 		switch r.Method {
 		case common.MethodGet:
 			switch {
+            case strings.Contains(r.URL.Path, rest.KRMR_CATALOG_BASE_URI):
+                 _, _ = w.Write([]byte(common.GraniteCatalogModelGet))
 			case strings.HasSuffix(r.URL.Path, rest.LIST_REG_MODEL_URI):
 				_, _ = w.Write([]byte(common.MnistRegisteredModels))
 			case strings.HasSuffix(r.URL.Path, fmt.Sprintf("%s/%s", rest.LIST_REG_MODEL_URI, "1")):
