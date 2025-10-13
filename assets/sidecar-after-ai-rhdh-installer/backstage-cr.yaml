@@ -56,6 +56,8 @@ spec:
                 envFrom:
                   - secretRef:
                       name: rhdh-rhoai-bridge-token
+                  - secretRef:
+                      name: ai-rh-developer-hub-env
                 image: quay.io/redhat-ai-dev/model-catalog-location-service:latest
                 imagePullPolicy: Always
                 name: location
@@ -85,6 +87,8 @@ spec:
                 envFrom:
                   - secretRef:
                       name: rhdh-rhoai-bridge-token
+                  - secretRef:
+                      name: ai-rh-developer-hub-env
                 image: quay.io/redhat-ai-dev/model-catalog-storage-rest:latest
                 imagePullPolicy: Always
                 name: storage-rest
@@ -106,6 +110,8 @@ spec:
                 envFrom:
                   - secretRef:
                       name: rhdh-rhoai-bridge-token
+                  - secretRef:
+                      name: ai-rh-developer-hub-env
                 image: quay.io/redhat-ai-dev/model-catalog-rhoai-normalizer:latest
                 imagePullPolicy: Always
                 name: rhoai-normalizer
