@@ -1,6 +1,6 @@
 module github.com/redhat-ai-dev/model-catalog-bridge
 
-go 1.24.4
+go 1.25.0
 
 replace github.com/kubeflow/model-registry/pkg/openapi v0.0.0 => github.com/kubeflow/model-registry/pkg/openapi v0.0.0-20250814123114-228b62d77e0e
 
@@ -140,7 +140,7 @@ require (
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
